@@ -1,5 +1,4 @@
 'use strict';
-
 const { banner, log } = require('./utils');
 const { mainMenu }    = require('./menu');
 
@@ -12,6 +11,6 @@ process.on('SIGINT', () => {
 (async () => {
   banner();
   log('Iniciando Painel 141...', 'info');
-  await new Promise(r => setTimeout(r, 800));
+  await new Promise(r => setTimeout(r, 600));
   await mainMenu();
 })();

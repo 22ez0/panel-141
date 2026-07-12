@@ -1,13 +1,14 @@
 {
   "name": "panel-141",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Painel 141 - Discord Automation Panel",
-  "main": "src/index.js",
+  "main": "dist/panel.js",
   "bin": {
-    "panel-141": "src/index.js"
+    "panel-141": "dist/panel.js"
   },
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node dist/panel.js",
+    "build": "node build.js"
   },
   "dependencies": {
     "axios": "^1.7.2",
@@ -17,5 +18,8 @@
     "inquirer": "^8.2.6",
     "node-fetch": "^2.7.0",
     "ora": "^5.4.1"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0"
   }
 }

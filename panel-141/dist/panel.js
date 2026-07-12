@@ -49782,13 +49782,12 @@ var require_menu = __commonJS({
     var inquirer = require_inquirer();
     var chalk = require_source();
     var { banner: banner2, log: log2, randomBetween } = require_utils();
-    var { validateToken, getChannels, runUserLoop } = require_discord();
+    var { validateToken, getChannels, sendMessage, sendFile } = require_discord();
     var cfg = require_config2();
     async function menuTokens(config) {
       banner2();
       console.log(chalk.yellow("  [ TOKENS \u2014 USUARIO OU BOT ]\n"));
-      console.log(chalk.gray("  Tokens atuais: ") + chalk.white(config.tokens.length));
-      console.log(chalk.gray("  Suporta: token de usuario Discord e token de Bot\n"));
+      console.log(chalk.gray("  Tokens atuais: ") + chalk.white(config.tokens.length) + "\n");
       const { action } = await inquirer.prompt([{
         type: "list",
         name: "action",
@@ -49796,13 +49795,13 @@ var require_menu = __commonJS({
         choices: [
           { name: "Adicionar token(s)", value: "add" },
           { name: "Listar e validar tokens", value: "list" },
-          { name: "Limpar todos os tokens", value: "clear" },
+          { name: "Limpar todos", value: "clear" },
           { name: "\u2190 Voltar", value: "back" }
         ]
       }]);
       if (action === "back") return;
       if (action === "add") {
-        console.log(chalk.gray("\n  Cole um token por linha (usuario ou bot). Linha em branco para finalizar.\n"));
+        console.log(chalk.gray("\n  Cole um token por linha. Linha em branco para finalizar.\n"));
         const tokens = [];
         const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
         await new Promise((resolve) => {
@@ -49821,53 +49820,46 @@ var require_menu = __commonJS({
       }
       if (action === "list") {
         if (!config.tokens.length) {
-          log2("Nenhum token salvo.", "warn");
+          log2("Nenhum token.", "warn");
           await new Promise((r) => setTimeout(r, 1500));
           return;
         }
         console.log("");
         for (let i = 0; i < config.tokens.length; i++) {
-          const short = config.tokens[i].substring(0, 20) + "...";
-          process.stdout.write(chalk.gray(`  [${i + 1}] ${short} \u2014 validando... `));
+          const short = config.tokens[i].substring(0, 24) + "...";
+          process.stdout.write(chalk.gray(`  [${i + 1}] ${short} `));
           const { ok, user, error } = await validateToken(config.tokens[i]);
           if (ok) {
             const tag = user.discriminator && user.discriminator !== "0" ? `${user.username}#${user.discriminator}` : user.username;
             console.log(chalk.green(`\u2713 ${tag}`));
           } else {
-            console.log(chalk.red(`\u2717 Invalido \u2014 ${error}`));
+            console.log(chalk.red(`\u2717 ${error}`));
           }
         }
         console.log("");
-        await inquirer.prompt([{ type: "input", name: "_", message: "Pressione Enter para voltar..." }]);
+        await inquirer.prompt([{ type: "input", name: "_", message: "Enter para voltar..." }]);
       }
       if (action === "clear") {
         config.tokens = [];
         cfg.save(config);
-        log2("Todos os tokens foram removidos.", "ok");
-        await new Promise((r) => setTimeout(r, 1200));
+        log2("Tokens removidos.", "ok");
+        await new Promise((r) => setTimeout(r, 1e3));
       }
     }
     async function menuUsuarios(config) {
       banner2();
-      console.log(chalk.yellow("  [ USUARIOS SIMULTANEOS ]\n"));
-      console.log(chalk.gray("  Tokens: ") + chalk.white(config.tokens.length));
-      console.log(chalk.gray("  Atual:  ") + chalk.white(config.simultaneousUsers) + "\n");
+      console.log(chalk.yellow("  [ CONTAS ATIVAS ]\n"));
       const max = Math.min(100, config.tokens.length || 100);
       const { qtd } = await inquirer.prompt([{
         type: "number",
         name: "qtd",
-        message: `Quantos usuarios simultaneos? (1\u2013${max})`,
-        validate: (v) => {
-          if (!Number.isInteger(v) || v < 1 || v > 100) return "Numero entre 1 e 100";
-          if (config.tokens.length && v > config.tokens.length)
-            return `So ha ${config.tokens.length} token(s)`;
-          return true;
-        }
+        message: `Quantas contas usar? (1\u2013${max})`,
+        validate: (v) => Number.isInteger(v) && v >= 1 && v <= 100 ? true : "Numero entre 1 e 100"
       }]);
       config.simultaneousUsers = qtd;
       cfg.save(config);
-      log2(`Usuarios simultaneos: ${qtd}`, "ok");
-      await new Promise((r) => setTimeout(r, 1200));
+      log2(`Contas ativas: ${qtd}`, "ok");
+      await new Promise((r) => setTimeout(r, 1e3));
     }
     async function menuServidor(config) {
       banner2();
@@ -49877,7 +49869,7 @@ var require_menu = __commonJS({
         name: "serverId",
         message: "ID do servidor (Guild ID):",
         default: config.serverId,
-        validate: (v) => v.trim() ? true : "ID nao pode ser vazio"
+        validate: (v) => v.trim() ? true : "Obrigatorio"
       }]);
       config.serverId = serverId.trim();
       if (config.tokens.length) {
@@ -49886,7 +49878,7 @@ var require_menu = __commonJS({
           const channels = await getChannels(config.tokens[0], config.serverId);
           if (channels.length) {
             console.log(chalk.green(`
-  ${channels.length} canal(is) de texto encontrado(s):
+  ${channels.length} canal(is) encontrado(s):
 `));
             channels.forEach((c, i) => console.log(chalk.gray(`  [${i + 1}]`) + ` #${c.name} ` + chalk.gray(`(${c.id})`)));
             console.log("");
@@ -49900,7 +49892,7 @@ var require_menu = __commonJS({
             config.channels = sel;
           }
         } catch (e) {
-          log2(`Nao foi possivel buscar canais: ${e.message}`, "error");
+          log2(`Erro ao buscar canais: ${e.message}`, "error");
           const { manual } = await inquirer.prompt([{
             type: "input",
             name: "manual",
@@ -49919,42 +49911,33 @@ var require_menu = __commonJS({
         config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
       }
       cfg.save(config);
-      log2(`Servidor e canais salvos. Canais: ${config.channels.length}`, "ok");
-      await new Promise((r) => setTimeout(r, 1200));
+      log2(`Servidor e ${config.channels.length} canal(is) salvos.`, "ok");
+      await new Promise((r) => setTimeout(r, 1e3));
     }
     async function menuMensagem(config) {
       banner2();
       console.log(chalk.yellow("  [ MENSAGEM & MIDIA ]\n"));
-      console.log(chalk.gray("  Envio infinito \u2014 sem limite de mensagens\n"));
       const { msg } = await inquirer.prompt([{
         type: "input",
         name: "msg",
-        message: "Mensagem a enviar (deixe em branco para so midia):",
+        message: "Mensagem a enviar (deixe vazio para so midia):",
         default: config.message || ""
       }]);
       config.message = msg.trim();
-      const { delay } = await inquirer.prompt([{
-        type: "number",
-        name: "delay",
-        message: "Intervalo entre mensagens em ms (ex: 1000 = 1s, 0 = sem espera):",
-        default: config.delayMs || 1e3,
-        validate: (v) => v >= 0 ? true : "Valor minimo: 0"
-      }]);
-      config.delayMs = delay;
       const { hasMedia } = await inquirer.prompt([{
         type: "confirm",
         name: "hasMedia",
-        message: "Enviar midia (foto/video) junto com as mensagens?",
+        message: "Enviar midia (foto/video)?",
         default: !!config.mediaPath
       }]);
       if (hasMedia) {
         const { mediaPath } = await inquirer.prompt([{
           type: "input",
           name: "mediaPath",
-          message: "Caminho completo do arquivo (foto ou video):",
+          message: "Caminho do arquivo (foto ou video):",
           default: config.mediaPath || "",
           validate: (v) => {
-            if (!v.trim()) return "Informe o caminho";
+            if (!v.trim()) return "Obrigatorio";
             if (!require("fs").existsSync(v.trim())) return "Arquivo nao encontrado";
             return true;
           }
@@ -49964,80 +49947,83 @@ var require_menu = __commonJS({
         config.mediaPath = "";
       }
       cfg.save(config);
-      log2("Mensagem configurada.", "ok");
-      await new Promise((r) => setTimeout(r, 1200));
+      log2("Configuracao salva.", "ok");
+      await new Promise((r) => setTimeout(r, 1e3));
     }
     async function menuIniciar(config) {
       banner2();
-      console.log(chalk.yellow("  [ INICIAR ENVIO INFINITO ]\n"));
+      console.log(chalk.yellow("  [ INICIAR \u2014 SEQUENCIAL ROUND-ROBIN ]\n"));
       const erros = [];
-      if (!config.tokens.length) erros.push("Nenhum token configurado (opcao 1)");
-      if (!config.serverId) erros.push("ID do servidor nao configurado (opcao 3)");
-      if (!config.channels.length) erros.push("Nenhum canal configurado (opcao 3)");
-      if (!config.message && !config.mediaPath) erros.push("Configure mensagem ou midia (opcao 4)");
+      if (!config.tokens.length) erros.push("Sem tokens (opcao 1)");
+      if (!config.serverId) erros.push("Sem servidor (opcao 3)");
+      if (!config.channels.length) erros.push("Sem canais (opcao 3)");
+      if (!config.message && !config.mediaPath) erros.push("Sem mensagem ou midia (opcao 4)");
       if (erros.length) {
         erros.forEach((e) => log2(e, "warn"));
-        await new Promise((r) => setTimeout(r, 2500));
+        await new Promise((r) => setTimeout(r, 2e3));
         return;
       }
-      console.log(chalk.gray("  Resumo:\n"));
-      console.log(`  ${chalk.cyan("Tokens/Usuarios: ")} ${config.tokens.length}`);
-      console.log(`  ${chalk.cyan("Simultaneos:     ")} ${config.simultaneousUsers}`);
-      console.log(`  ${chalk.cyan("Servidor:        ")} ${config.serverId}`);
-      console.log(`  ${chalk.cyan("Canais:          ")} ${config.channels.length}`);
-      console.log(`  ${chalk.cyan("Mensagem:        ")} ${config.message || chalk.gray("(so midia)")}`);
-      console.log(`  ${chalk.cyan("Midia:           ")} ${config.mediaPath || chalk.gray("Nenhuma")}`);
-      console.log(`  ${chalk.cyan("Intervalo:       ")} ${config.delayMs}ms`);
-      console.log(`  ${chalk.cyan("Modo:            ")} ${chalk.red("INFINITO")} (Ctrl+C para parar)`);
+      const tokens = config.tokens.slice(0, config.simultaneousUsers);
+      console.log(chalk.gray("  Modo: cada conta envia 1 mensagem por vez, em sequencia circular\n"));
+      console.log(`  ${chalk.cyan("Contas:   ")} ${tokens.length}`);
+      console.log(`  ${chalk.cyan("Canais:   ")} ${config.channels.length}`);
+      console.log(`  ${chalk.cyan("Mensagem: ")} ${config.message || chalk.gray("(so midia)")}`);
+      console.log(`  ${chalk.cyan("Midia:    ")} ${config.mediaPath || chalk.gray("Nenhuma")}`);
+      console.log(`  ${chalk.cyan("Modo:     ")} ${chalk.red("INFINITO")} \u2014 Ctrl+C para parar`);
       console.log("");
       const { confirm } = await inquirer.prompt([{
         type: "confirm",
         name: "confirm",
-        message: chalk.red("Iniciar envio infinito?")
+        message: chalk.red("Iniciar?")
       }]);
       if (!confirm) return;
-      const tokens = config.tokens.slice(0, config.simultaneousUsers);
-      let totalGlobal = 0;
       console.log("");
-      log2(`Iniciando ${tokens.length} usuario(s) em loop infinito. Ctrl+C para parar.`, "info");
-      console.log("");
-      const jobs = tokens.map(
-        (token, idx) => runUserLoop({
-          token,
-          channels: config.channels,
-          message: config.message,
-          mediaPath: config.mediaPath || null,
-          userId: idx + 1,
-          delayMs: config.delayMs,
-          onSend: (uid, count, ch) => {
-            totalGlobal++;
-            log2(`[User ${uid}] #${count} \u2192 canal ${ch} | Total: ${totalGlobal}`, "send");
-          },
-          onError: (uid, err) => log2(`[User ${uid}] Erro: ${err}`, "error")
-        })
-      );
-      await Promise.race(jobs);
+      log2("Iniciando envio sequencial. Ctrl+C para parar.\n", "info");
+      let round = 0;
+      let total = 0;
+      let chanIdx = 0;
+      while (true) {
+        const token = tokens[round % tokens.length];
+        const channelId = config.channels[chanIdx % config.channels.length];
+        const userNum = round % tokens.length + 1;
+        try {
+          if (config.mediaPath) {
+            await sendFile(token, channelId, config.mediaPath, config.message);
+          } else {
+            await sendMessage(token, channelId, config.message);
+          }
+          total++;
+          log2(`[Conta ${userNum}] enviou \u2192 canal ${channelId} | Total: ${chalk.white(total)}`, "send");
+        } catch (e) {
+          const msg = e?.response?.data?.message || e.message;
+          const retryAfter = e?.response?.data?.retry_after;
+          log2(`[Conta ${userNum}] Erro: ${msg}`, "error");
+          if (e?.response?.status === 429 && retryAfter) {
+            log2(`Rate limit \u2014 aguardando ${retryAfter}s`, "warn");
+            await new Promise((r) => setTimeout(r, retryAfter * 1e3));
+          }
+        }
+        round++;
+        if (round % tokens.length === 0) chanIdx++;
+      }
     }
     function showStatus(config) {
-      const clean = (s) => s.replace(/\x1B\[[0-9;]*m/g, "");
-      const pad = (s, n) => s + " ".repeat(Math.max(0, n - clean(s).length));
       const t = config.tokens.length;
       const si = config.simultaneousUsers;
-      const sv = config.serverId || chalk.red("nao configurado");
+      const sv = config.serverId || chalk.red("nao config");
       const ch = config.channels.length;
-      const dl = `${config.delayMs || 1e3}ms`;
+      const mg = config.message ? config.message.substring(0, 28) : chalk.gray("nao config");
       const md = config.mediaPath ? chalk.green("sim") : chalk.gray("nao");
-      const mg = config.message ? chalk.white(config.message.substring(0, 25) + (config.message.length > 25 ? "..." : "")) : chalk.gray("nao configurada");
       return [
         "",
         chalk.gray("  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557"),
-        chalk.gray("  \u2551") + chalk.cyan("  STATUS                                 ") + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + chalk.cyan("  PAINEL 141 \u2014 STATUS                    ") + chalk.gray("\u2551"),
         chalk.gray("  \u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563"),
-        chalk.gray("  \u2551") + pad(`  Tokens:    ${chalk.white(t)} (${si} simult.)`, 45) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + pad(`  Servidor:  ${sv}`, 45) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + pad(`  Canais:    ${chalk.white(ch)} canal(is)`, 45) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + pad(`  Mensagem:  ${mg}`, 45) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + pad(`  Midia:     ${md}  Intervalo: ${chalk.white(dl)}`, 45) + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + `  Tokens:    ${chalk.white(t)} | Ativas: ${chalk.white(si)}` + " ".repeat(Math.max(0, 18 - String(t).length - String(si).length)) + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + `  Servidor:  ${sv}` + " ".repeat(Math.max(0, 31 - sv.replace(/\x1B\[[0-9;]*m/g, "").length)) + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + `  Canais:    ${chalk.white(ch)}` + " ".repeat(Math.max(0, 29 - String(ch).length)) + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + `  Mensagem:  ${mg}` + " ".repeat(Math.max(0, 31 - mg.replace(/\x1B\[[0-9;]*m/g, "").length)) + chalk.gray("\u2551"),
+        chalk.gray("  \u2551") + `  Midia:     ${md}` + " ".repeat(36) + chalk.gray("\u2551"),
         chalk.gray("  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D"),
         ""
       ].join("\n");
@@ -50050,19 +50036,19 @@ var require_menu = __commonJS({
         const { option } = await inquirer.prompt([{
           type: "list",
           name: "option",
-          message: chalk.white("Selecione uma opcao:"),
+          message: chalk.white("Selecione:"),
           choices: [
-            { name: `${chalk.cyan("1.")} Tokens (usuario ou bot)`, value: "1" },
-            { name: `${chalk.cyan("2.")} Usuarios Simultaneos (1\u2013100)`, value: "2" },
-            { name: `${chalk.cyan("3.")} ID do Servidor & Canais`, value: "3" },
+            { name: `${chalk.cyan("1.")} Tokens (usuario / bot)`, value: "1" },
+            { name: `${chalk.cyan("2.")} Contas ativas (1\u2013100)`, value: "2" },
+            { name: `${chalk.cyan("3.")} Servidor & Canais`, value: "3" },
             { name: `${chalk.cyan("4.")} Mensagem & Midia`, value: "4" },
-            { name: `${chalk.red("\u25BA")} ${chalk.red("INICIAR ENVIO INFINITO")}`, value: "5" },
+            { name: `${chalk.red("\u25BA")} ${chalk.red("INICIAR ENVIO")}`, value: "5" },
             new inquirer.Separator(),
             { name: chalk.gray("Sair"), value: "0" }
           ]
         }]);
         if (option === "0") {
-          console.log(chalk.gray("\n  Encerrando Painel 141.\n"));
+          console.log(chalk.gray("\n  Encerrando.\n"));
           process.exit(0);
         }
         if (option === "1") {

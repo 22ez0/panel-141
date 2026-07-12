@@ -11,7 +11,6 @@ const DEFAULT = {
   simultaneousUsers: 1,
   message: '',
   mediaPath: '',
-  delayMs: 1000,
 };
 
 function load() {

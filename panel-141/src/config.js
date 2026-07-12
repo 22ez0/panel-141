@@ -5,11 +5,13 @@ const path = require('path');
 const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
 
 const DEFAULT = {
-  tokens: [],        // Discord user/bot tokens
-  serverId: '',      // Target server (guild) ID
-  channels: [],      // Target channel IDs
-  messageRatio: 10,  // Send 1 message every N (default: 10)
+  tokens: [],
+  serverId: '',
+  channels: [],
   simultaneousUsers: 1,
+  message: '',
+  mediaPath: '',
+  delayMs: 1000,
 };
 
 function load() {

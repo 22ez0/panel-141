@@ -2,7 +2,9 @@
 const fs   = require('fs');
 const path = require('path');
 
-const CONFIG_PATH = path.join(__dirname, '..', 'config.json');
+// Salva config.json na mesma pasta do script (funciona bundled ou nao)
+const SCRIPT_DIR  = path.dirname(process.argv[1] || __filename);
+const CONFIG_PATH = path.join(SCRIPT_DIR, 'config.json');
 
 const DEFAULT = {
   tokens: [],

@@ -1562,22 +1562,19 @@ var require_utils = __commonJS({
     "use strict";
     var chalk = require_source();
     function banner2() {
-      const lines = [
-        "",
-        chalk.red("  \u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2557"),
-        chalk.red("  \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2551"),
-        chalk.red("  \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u255A\u2588\u2588\u2551"),
-        chalk.red("  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2551"),
-        chalk.red("       \u2588\u2588\u2551 \u2588\u2588\u2551"),
-        chalk.red("       \u255A\u2550\u255D \u255A\u2550\u255D"),
-        "",
-        chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"),
-        chalk.white("     PAINEL ") + chalk.red("141") + chalk.white(" \u2014 Discord Panel"),
-        chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"),
-        ""
-      ];
       console.clear();
-      console.log(lines.join("\n"));
+      console.log("");
+      console.log(chalk.red("  \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2557"));
+      console.log(chalk.red("  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2557 \u2588\u2588\u2551  \u2588\u2588\u2551 \u2588\u2588\u2551"));
+      console.log(chalk.red("      \u2588\u2588\u2554\u255D \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u2588\u2588\u2551"));
+      console.log(chalk.red("     \u2588\u2588\u2554\u255D  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551 \u255A\u2550\u255D"));
+      console.log(chalk.red("    \u2588\u2588\u2588\u2588\u2588\u2588\u2557      \u2588\u2588\u2551 \u2588\u2588\u2557"));
+      console.log(chalk.red("    \u255A\u2550\u2550\u2550\u2550\u2550\u255D      \u255A\u2550\u255D \u255A\u2550\u255D"));
+      console.log("");
+      console.log(chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+      console.log(chalk.white("     PAINEL ") + chalk.red("141") + chalk.white(" \u2014 Discord Panel"));
+      console.log(chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+      console.log("");
     }
     function log2(msg, type = "info") {
       const ts = (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR");
@@ -1590,13 +1587,10 @@ var require_utils = __commonJS({
       }[type] || chalk.white(`[${ts}]`);
       console.log(`${prefix} ${msg}`);
     }
-    function sleep(ms) {
-      return new Promise((r) => setTimeout(r, ms));
-    }
     function randomBetween(min, max) {
       return Math.floor(Math.random() * (max - min + 1)) + min;
     }
-    module2.exports = { banner: banner2, log: log2, sleep, randomBetween };
+    module2.exports = { banner: banner2, log: log2, randomBetween };
   }
 });
 
@@ -49748,7 +49742,8 @@ var require_config2 = __commonJS({
     "use strict";
     var fs = require("fs");
     var path = require("path");
-    var CONFIG_PATH = path.join(__dirname, "..", "config.json");
+    var SCRIPT_DIR = path.dirname(process.argv[1] || __filename);
+    var CONFIG_PATH = path.join(SCRIPT_DIR, "config.json");
     var DEFAULT = {
       tokens: [],
       serverId: "",
@@ -49779,118 +49774,182 @@ var require_menu = __commonJS({
     "use strict";
     var inquirer = require_inquirer();
     var chalk = require_source();
-    var { banner: banner2, log: log2, randomBetween } = require_utils();
+    var { banner: banner2, log: log2 } = require_utils();
     var { validateToken, getChannels, sendMessage, sendFile } = require_discord();
     var cfg = require_config2();
+    async function pressEnter() {
+      await inquirer.prompt([{ type: "input", name: "_", message: "Pressione Enter para voltar..." }]);
+    }
     async function menuTokens(config) {
-      banner2();
-      console.log(chalk.yellow("  [ TOKENS \u2014 USUARIO OU BOT ]\n"));
-      console.log(chalk.gray("  Tokens atuais: ") + chalk.white(config.tokens.length) + "\n");
-      const { action } = await inquirer.prompt([{
-        type: "list",
-        name: "action",
-        message: "O que deseja fazer?",
-        choices: [
-          { name: "Adicionar token(s)", value: "add" },
-          { name: "Listar e validar tokens", value: "list" },
-          { name: "Limpar todos", value: "clear" },
-          { name: "\u2190 Voltar", value: "back" }
-        ]
-      }]);
-      if (action === "back") return;
-      if (action === "add") {
-        console.log(chalk.gray("\n  Cole um token por linha. Linha em branco para finalizar.\n"));
-        const tokens = [];
-        const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
-        await new Promise((resolve) => {
-          rl.on("line", (line) => {
-            const t = line.trim();
-            if (!t) {
-              rl.close();
-              resolve();
-            } else tokens.push(t);
+      while (true) {
+        banner2();
+        console.log(chalk.yellow("  [ TOKENS ]\n"));
+        console.log(chalk.gray("  Suporta token de usuario e token de Bot do Discord"));
+        console.log(chalk.gray("  Tokens ativos: ") + chalk.white(config.tokens.length) + "\n");
+        const { action } = await inquirer.prompt([{
+          type: "list",
+          name: "action",
+          message: "Opcao:",
+          choices: [
+            { name: "Adicionar tokens (cole 1 a 100 de uma vez)", value: "add" },
+            { name: "Listar e validar tokens", value: "list" },
+            { name: "Limpar todos os tokens", value: "clear" },
+            { name: chalk.gray("\u2190 Voltar"), value: "back" }
+          ]
+        }]);
+        if (action === "back") return;
+        if (action === "add") {
+          console.log(chalk.gray("\n  Cole os tokens \u2014 um por linha OU separados por virgula."));
+          console.log(chalk.gray("  Suporta ate 100 tokens de uma vez."));
+          console.log(chalk.gray("  Linha em branco para finalizar.\n"));
+          const linhas = [];
+          const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
+          await new Promise((resolve) => {
+            rl.on("line", (line) => {
+              if (!line.trim()) {
+                rl.close();
+                resolve();
+              } else linhas.push(line);
+            });
           });
-        });
-        config.tokens = [.../* @__PURE__ */ new Set([...config.tokens, ...tokens])];
-        cfg.save(config);
-        log2(`${tokens.length} token(s) adicionado(s). Total: ${config.tokens.length}`, "ok");
-        await new Promise((r) => setTimeout(r, 1500));
-      }
-      if (action === "list") {
-        if (!config.tokens.length) {
-          log2("Nenhum token.", "warn");
-          await new Promise((r) => setTimeout(r, 1500));
-          return;
+          const novos = linhas.flatMap((l) => l.split(",")).map((t) => t.trim()).filter(Boolean);
+          const antes = config.tokens.length;
+          config.tokens = [.../* @__PURE__ */ new Set([...config.tokens, ...novos])].slice(0, 100);
+          cfg.save(config);
+          log2(`${config.tokens.length - antes} token(s) adicionado(s). Total: ${config.tokens.length}/100`, "ok");
+          await new Promise((r) => setTimeout(r, 1800));
         }
-        console.log("");
-        for (let i = 0; i < config.tokens.length; i++) {
-          const short = config.tokens[i].substring(0, 24) + "...";
-          process.stdout.write(chalk.gray(`  [${i + 1}] ${short} `));
-          const { ok, user, error } = await validateToken(config.tokens[i]);
-          if (ok) {
-            const tag = user.discriminator && user.discriminator !== "0" ? `${user.username}#${user.discriminator}` : user.username;
-            console.log(chalk.green(`\u2713 ${tag}`));
-          } else {
-            console.log(chalk.red(`\u2717 ${error}`));
+        if (action === "list") {
+          if (!config.tokens.length) {
+            log2("Nenhum token salvo.", "warn");
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
           }
+          console.log("");
+          for (let i = 0; i < config.tokens.length; i++) {
+            const short = config.tokens[i].substring(0, 26) + "...";
+            process.stdout.write(chalk.gray(`  [${String(i + 1).padStart(2)}] ${short} `));
+            const { ok, user, error } = await validateToken(config.tokens[i]);
+            if (ok) {
+              const tag = user.discriminator && user.discriminator !== "0" ? `${user.username}#${user.discriminator}` : user.username;
+              console.log(chalk.green(`\u2713 ${tag}`));
+            } else {
+              console.log(chalk.red(`\u2717 ${error}`));
+            }
+          }
+          console.log("");
+          await pressEnter();
         }
-        console.log("");
-        await inquirer.prompt([{ type: "input", name: "_", message: "Enter para voltar..." }]);
-      }
-      if (action === "clear") {
-        config.tokens = [];
-        cfg.save(config);
-        log2("Tokens removidos.", "ok");
-        await new Promise((r) => setTimeout(r, 1e3));
+        if (action === "clear") {
+          config.tokens = [];
+          cfg.save(config);
+          log2("Tokens removidos.", "ok");
+          await new Promise((r) => setTimeout(r, 1e3));
+        }
       }
     }
     async function menuUsuarios(config) {
-      banner2();
-      console.log(chalk.yellow("  [ CONTAS ATIVAS ]\n"));
-      const max = Math.min(100, config.tokens.length || 100);
-      const { qtd } = await inquirer.prompt([{
-        type: "number",
-        name: "qtd",
-        message: `Quantas contas usar? (1\u2013${max})`,
-        validate: (v) => Number.isInteger(v) && v >= 1 && v <= 100 ? true : "Numero entre 1 e 100"
-      }]);
-      config.simultaneousUsers = qtd;
-      cfg.save(config);
-      log2(`Contas ativas: ${qtd}`, "ok");
-      await new Promise((r) => setTimeout(r, 1e3));
+      while (true) {
+        banner2();
+        console.log(chalk.yellow("  [ CONTAS ATIVAS ]\n"));
+        console.log(chalk.gray("  Tokens disponiveis: ") + chalk.white(config.tokens.length));
+        console.log(chalk.gray("  Contas ativas:      ") + chalk.white(config.simultaneousUsers) + "\n");
+        const { action } = await inquirer.prompt([{
+          type: "list",
+          name: "action",
+          message: "Opcao:",
+          choices: [
+            { name: "Definir quantidade de contas", value: "set" },
+            { name: chalk.gray("\u2190 Voltar"), value: "back" }
+          ]
+        }]);
+        if (action === "back") return;
+        const max = Math.min(100, config.tokens.length || 100);
+        const { qtd } = await inquirer.prompt([{
+          type: "number",
+          name: "qtd",
+          message: `Quantas contas simultaneas? (1\u2013${max}):`,
+          validate: (v) => {
+            if (!Number.isInteger(v) || v < 1 || v > 100) return "Entre 1 e 100";
+            if (config.tokens.length && v > config.tokens.length) return `Voce tem apenas ${config.tokens.length} token(s)`;
+            return true;
+          }
+        }]);
+        config.simultaneousUsers = qtd;
+        cfg.save(config);
+        log2(`Contas ativas definido: ${qtd}`, "ok");
+        await new Promise((r) => setTimeout(r, 1e3));
+      }
     }
     async function menuServidor(config) {
-      banner2();
-      console.log(chalk.yellow("  [ SERVIDOR & CANAIS ]\n"));
-      const { serverId } = await inquirer.prompt([{
-        type: "input",
-        name: "serverId",
-        message: "ID do servidor (Guild ID):",
-        default: config.serverId,
-        validate: (v) => v.trim() ? true : "Obrigatorio"
-      }]);
-      config.serverId = serverId.trim();
-      if (config.tokens.length) {
-        log2("Buscando canais...", "info");
-        try {
-          const channels = await getChannels(config.tokens[0], config.serverId);
-          if (channels.length) {
-            console.log(chalk.green(`
-  ${channels.length} canal(is) encontrado(s):
+      while (true) {
+        banner2();
+        console.log(chalk.yellow("  [ SERVIDOR & CANAIS ]\n"));
+        console.log(chalk.gray("  Servidor: ") + chalk.white(config.serverId || "nao configurado"));
+        console.log(chalk.gray("  Canais:   ") + chalk.white(config.channels.length) + "\n");
+        const { action } = await inquirer.prompt([{
+          type: "list",
+          name: "action",
+          message: "Opcao:",
+          choices: [
+            { name: "Configurar servidor e canais", value: "set" },
+            { name: "Inserir IDs de canais manualmente", value: "manual" },
+            { name: chalk.gray("\u2190 Voltar"), value: "back" }
+          ]
+        }]);
+        if (action === "back") return;
+        if (action === "set") {
+          const { serverId } = await inquirer.prompt([{
+            type: "input",
+            name: "serverId",
+            message: "ID do servidor (Guild ID):",
+            default: config.serverId,
+            validate: (v) => v.trim() ? true : "Obrigatorio"
+          }]);
+          config.serverId = serverId.trim();
+          if (config.tokens.length) {
+            log2("Buscando canais...", "info");
+            try {
+              const channels = await getChannels(config.tokens[0], config.serverId);
+              if (channels.length) {
+                console.log(chalk.green(`
+  ${channels.length} canal(is) de texto encontrado(s):
 `));
-            channels.forEach((c, i) => console.log(chalk.gray(`  [${i + 1}]`) + ` #${c.name} ` + chalk.gray(`(${c.id})`)));
-            console.log("");
-            const { sel } = await inquirer.prompt([{
-              type: "checkbox",
-              name: "sel",
-              message: "Selecione os canais alvo:",
-              choices: channels.map((c) => ({ name: `#${c.name}`, value: c.id })),
-              validate: (v) => v.length ? true : "Selecione ao menos 1"
+                channels.forEach((c, i) => console.log(chalk.gray(`  [${i + 1}]`) + ` #${c.name} ` + chalk.gray(`(${c.id})`)));
+                console.log("");
+                const { sel } = await inquirer.prompt([{
+                  type: "checkbox",
+                  name: "sel",
+                  message: "Selecione os canais alvo:",
+                  choices: channels.map((c) => ({ name: `#${c.name}`, value: c.id })),
+                  validate: (v) => v.length ? true : "Selecione ao menos 1"
+                }]);
+                config.channels = sel;
+              }
+            } catch (e) {
+              log2(`Erro ao buscar canais: ${e.message}`, "error");
+              const { manual } = await inquirer.prompt([{
+                type: "input",
+                name: "manual",
+                message: "IDs dos canais (virgula):",
+                default: config.channels.join(",")
+              }]);
+              config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
+            }
+          } else {
+            const { manual } = await inquirer.prompt([{
+              type: "input",
+              name: "manual",
+              message: "IDs dos canais (separados por virgula):",
+              default: config.channels.join(",")
             }]);
-            config.channels = sel;
+            config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
           }
-        } catch (e) {
-          log2(`Erro ao buscar canais: ${e.message}`, "error");
+          cfg.save(config);
+          log2(`Servidor e ${config.channels.length} canal(is) salvos.`, "ok");
+          await new Promise((r) => setTimeout(r, 1e3));
+        }
+        if (action === "manual") {
           const { manual } = await inquirer.prompt([{
             type: "input",
             name: "manual",
@@ -49898,59 +49957,70 @@ var require_menu = __commonJS({
             default: config.channels.join(",")
           }]);
           config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
+          cfg.save(config);
+          log2(`${config.channels.length} canal(is) salvos.`, "ok");
+          await new Promise((r) => setTimeout(r, 1e3));
         }
-      } else {
-        const { manual } = await inquirer.prompt([{
-          type: "input",
-          name: "manual",
-          message: "IDs dos canais (separados por virgula):",
-          default: config.channels.join(",")
-        }]);
-        config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
       }
-      cfg.save(config);
-      log2(`Servidor e ${config.channels.length} canal(is) salvos.`, "ok");
-      await new Promise((r) => setTimeout(r, 1e3));
     }
     async function menuMensagem(config) {
-      banner2();
-      console.log(chalk.yellow("  [ MENSAGEM & MIDIA ]\n"));
-      const { msg } = await inquirer.prompt([{
-        type: "input",
-        name: "msg",
-        message: "Mensagem a enviar (deixe vazio para so midia):",
-        default: config.message || ""
-      }]);
-      config.message = msg.trim();
-      const { hasMedia } = await inquirer.prompt([{
-        type: "confirm",
-        name: "hasMedia",
-        message: "Enviar midia (foto/video)?",
-        default: !!config.mediaPath
-      }]);
-      if (hasMedia) {
-        const { mediaPath } = await inquirer.prompt([{
-          type: "input",
-          name: "mediaPath",
-          message: "Caminho do arquivo (foto ou video):",
-          default: config.mediaPath || "",
-          validate: (v) => {
-            if (!v.trim()) return "Obrigatorio";
-            if (!require("fs").existsSync(v.trim())) return "Arquivo nao encontrado";
-            return true;
-          }
+      while (true) {
+        banner2();
+        console.log(chalk.yellow("  [ MENSAGEM & MIDIA ]\n"));
+        console.log(chalk.gray("  Mensagem: ") + chalk.white(config.message || "nao configurada"));
+        console.log(chalk.gray("  Midia:    ") + chalk.white(config.mediaPath || "nenhuma") + "\n");
+        const { action } = await inquirer.prompt([{
+          type: "list",
+          name: "action",
+          message: "Opcao:",
+          choices: [
+            { name: "Definir mensagem", value: "msg" },
+            { name: "Definir midia (foto/video)", value: "media" },
+            { name: "Remover midia", value: "removemedia" },
+            { name: chalk.gray("\u2190 Voltar"), value: "back" }
+          ]
         }]);
-        config.mediaPath = mediaPath.trim();
-      } else {
-        config.mediaPath = "";
+        if (action === "back") return;
+        if (action === "msg") {
+          const { msg } = await inquirer.prompt([{
+            type: "input",
+            name: "msg",
+            message: "Mensagem a enviar:",
+            default: config.message || ""
+          }]);
+          config.message = msg.trim();
+          cfg.save(config);
+          log2("Mensagem salva.", "ok");
+          await new Promise((r) => setTimeout(r, 800));
+        }
+        if (action === "media") {
+          const { mediaPath } = await inquirer.prompt([{
+            type: "input",
+            name: "mediaPath",
+            message: "Caminho completo do arquivo (ex: C:\\fotos\\img.jpg):",
+            default: config.mediaPath || "",
+            validate: (v) => {
+              if (!v.trim()) return "Obrigatorio";
+              if (!require("fs").existsSync(v.trim())) return "Arquivo nao encontrado";
+              return true;
+            }
+          }]);
+          config.mediaPath = mediaPath.trim();
+          cfg.save(config);
+          log2("Midia salva.", "ok");
+          await new Promise((r) => setTimeout(r, 800));
+        }
+        if (action === "removemedia") {
+          config.mediaPath = "";
+          cfg.save(config);
+          log2("Midia removida.", "ok");
+          await new Promise((r) => setTimeout(r, 800));
+        }
       }
-      cfg.save(config);
-      log2("Configuracao salva.", "ok");
-      await new Promise((r) => setTimeout(r, 1e3));
     }
     async function menuIniciar(config) {
       banner2();
-      console.log(chalk.yellow("  [ INICIAR \u2014 SEQUENCIAL ROUND-ROBIN ]\n"));
+      console.log(chalk.yellow("  [ INICIAR ENVIO \u2014 ROUND-ROBIN SEQUENCIAL ]\n"));
       const erros = [];
       if (!config.tokens.length) erros.push("Sem tokens (opcao 1)");
       if (!config.serverId) erros.push("Sem servidor (opcao 3)");
@@ -49958,11 +50028,11 @@ var require_menu = __commonJS({
       if (!config.message && !config.mediaPath) erros.push("Sem mensagem ou midia (opcao 4)");
       if (erros.length) {
         erros.forEach((e) => log2(e, "warn"));
-        await new Promise((r) => setTimeout(r, 2e3));
+        await pressEnter();
         return;
       }
       const tokens = config.tokens.slice(0, config.simultaneousUsers);
-      console.log(chalk.gray("  Modo: cada conta envia 1 mensagem por vez, em sequencia circular\n"));
+      console.log(chalk.gray("  Cada conta envia 1 mensagem \u2192 proxima conta \u2192 ciclo infinito\n"));
       console.log(`  ${chalk.cyan("Contas:   ")} ${tokens.length}`);
       console.log(`  ${chalk.cyan("Canais:   ")} ${config.channels.length}`);
       console.log(`  ${chalk.cyan("Mensagem: ")} ${config.message || chalk.gray("(so midia)")}`);
@@ -49972,14 +50042,12 @@ var require_menu = __commonJS({
       const { confirm } = await inquirer.prompt([{
         type: "confirm",
         name: "confirm",
-        message: chalk.red("Iniciar?")
+        message: chalk.red("Iniciar envio?")
       }]);
       if (!confirm) return;
       console.log("");
-      log2("Iniciando envio sequencial. Ctrl+C para parar.\n", "info");
-      let round = 0;
-      let total = 0;
-      let chanIdx = 0;
+      log2("Enviando... Ctrl+C para parar.\n", "info");
+      let round = 0, total = 0, chanIdx = 0;
       while (true) {
         const token = tokens[round % tokens.length];
         const channelId = config.channels[chanIdx % config.channels.length];
@@ -49991,14 +50059,15 @@ var require_menu = __commonJS({
             await sendMessage(token, channelId, config.message);
           }
           total++;
-          log2(`[Conta ${userNum}] enviou \u2192 canal ${channelId} | Total: ${chalk.white(total)}`, "send");
+          log2(`[Conta ${String(userNum).padStart(2)}] \u2192 canal ${channelId} | Total: ${chalk.white(total)}`, "send");
         } catch (e) {
           const msg = e?.response?.data?.message || e.message;
-          const retryAfter = e?.response?.data?.retry_after;
-          log2(`[Conta ${userNum}] Erro: ${msg}`, "error");
-          if (e?.response?.status === 429 && retryAfter) {
-            log2(`Rate limit \u2014 aguardando ${retryAfter}s`, "warn");
-            await new Promise((r) => setTimeout(r, retryAfter * 1e3));
+          log2(`[Conta ${String(userNum).padStart(2)}] Erro: ${msg}`, "error");
+          if (e?.response?.status === 429) {
+            const wait = (e.response?.data?.retry_after || 2) * 1e3;
+            log2(`Rate limit \u2014 aguardando ${wait / 1e3}s`, "warn");
+            await new Promise((r) => setTimeout(r, wait));
+            continue;
           }
         }
         round++;
@@ -50010,19 +50079,23 @@ var require_menu = __commonJS({
       const si = config.simultaneousUsers;
       const sv = config.serverId || chalk.red("nao config");
       const ch = config.channels.length;
-      const mg = config.message ? config.message.substring(0, 28) : chalk.gray("nao config");
+      const mg = config.message ? config.message.length > 30 ? config.message.substring(0, 30) + "..." : config.message : chalk.gray("nao config");
       const md = config.mediaPath ? chalk.green("sim") : chalk.gray("nao");
+      const line = (label, val, padTo = 42) => {
+        const content = `  ${label.padEnd(12)}${val}`;
+        const raw = content.replace(/\x1B\[[0-9;]*m/g, "");
+        return chalk.gray("  \u2551") + content + " ".repeat(Math.max(0, padTo - raw.length)) + chalk.gray("\u2551");
+      };
       return [
-        "",
-        chalk.gray("  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557"),
-        chalk.gray("  \u2551") + chalk.cyan("  PAINEL 141 \u2014 STATUS                    ") + chalk.gray("\u2551"),
-        chalk.gray("  \u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563"),
-        chalk.gray("  \u2551") + `  Tokens:    ${chalk.white(t)} | Ativas: ${chalk.white(si)}` + " ".repeat(Math.max(0, 18 - String(t).length - String(si).length)) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + `  Servidor:  ${sv}` + " ".repeat(Math.max(0, 31 - sv.replace(/\x1B\[[0-9;]*m/g, "").length)) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + `  Canais:    ${chalk.white(ch)}` + " ".repeat(Math.max(0, 29 - String(ch).length)) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + `  Mensagem:  ${mg}` + " ".repeat(Math.max(0, 31 - mg.replace(/\x1B\[[0-9;]*m/g, "").length)) + chalk.gray("\u2551"),
-        chalk.gray("  \u2551") + `  Midia:     ${md}` + " ".repeat(36) + chalk.gray("\u2551"),
-        chalk.gray("  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D"),
+        chalk.gray("  \u2554\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2557"),
+        chalk.gray("  \u2551") + chalk.cyan("  STATUS PAINEL 141                        ") + chalk.gray("\u2551"),
+        chalk.gray("  \u2560\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2563"),
+        line("Tokens:", `${chalk.white(t)}/100 | Ativas: ${chalk.white(si)}`),
+        line("Servidor:", sv),
+        line("Canais:", `${chalk.white(ch)} canal(is)`),
+        line("Mensagem:", mg),
+        line("Midia:", md),
+        chalk.gray("  \u255A\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u255D"),
         ""
       ].join("\n");
     }
@@ -50036,7 +50109,7 @@ var require_menu = __commonJS({
           name: "option",
           message: chalk.white("Selecione:"),
           choices: [
-            { name: `${chalk.cyan("1.")} Tokens (usuario / bot)`, value: "1" },
+            { name: `${chalk.cyan("1.")} Tokens (usuario / bot) \u2014 ate 100`, value: "1" },
             { name: `${chalk.cyan("2.")} Contas ativas (1\u2013100)`, value: "2" },
             { name: `${chalk.cyan("3.")} Servidor & Canais`, value: "3" },
             { name: `${chalk.cyan("4.")} Mensagem & Midia`, value: "4" },
@@ -50046,7 +50119,7 @@ var require_menu = __commonJS({
           ]
         }]);
         if (option === "0") {
-          console.log(chalk.gray("\n  Encerrando.\n"));
+          console.log(chalk.gray("\n  Encerrando Painel 141.\n"));
           process.exit(0);
         }
         if (option === "1") {

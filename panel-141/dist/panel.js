@@ -1564,16 +1564,17 @@ var require_utils = __commonJS({
     function banner2() {
       console.clear();
       console.log("");
-      console.log(chalk.red("  \u2588\u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2557"));
-      console.log(chalk.red("  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2557 \u2588\u2588\u2551  \u2588\u2588\u2551 \u2588\u2588\u2551"));
-      console.log(chalk.red("      \u2588\u2588\u2554\u255D \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u2588\u2588\u2551"));
-      console.log(chalk.red("     \u2588\u2588\u2554\u255D  \u255A\u2550\u2550\u2550\u2550\u2588\u2588\u2551 \u255A\u2550\u255D"));
-      console.log(chalk.red("    \u2588\u2588\u2588\u2588\u2588\u2588\u2557      \u2588\u2588\u2551 \u2588\u2588\u2557"));
-      console.log(chalk.red("    \u255A\u2550\u2550\u2550\u2550\u2550\u255D      \u255A\u2550\u255D \u255A\u2550\u255D"));
-      console.log("");
-      console.log(chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
-      console.log(chalk.white("     PAINEL ") + chalk.red("141") + chalk.white(" \u2014 Discord Panel"));
-      console.log(chalk.gray("  \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500"));
+      console.log(chalk.red("  ######################################"));
+      console.log(chalk.red("  ##                                  ##"));
+      console.log(chalk.red("  ##    __ ") + chalk.white("  _  _  __ ") + chalk.red("               ##"));
+      console.log(chalk.red("  ##   /  |") + chalk.white(" | || |  \\") + chalk.red("               ##"));
+      console.log(chalk.red("  ##   | | ") + chalk.white(" | || |  > >") + chalk.red("              ##"));
+      console.log(chalk.red("  ##   |_| ") + chalk.white("  _/  /_/ ") + chalk.red("               ##"));
+      console.log(chalk.red("  ##                                  ##"));
+      console.log(chalk.red("  ######################################"));
+      console.log(chalk.red("  ##") + chalk.white("   P A I N E L  ") + chalk.red.bold("1 4 1") + chalk.white("         ") + chalk.red("##"));
+      console.log(chalk.red("  ##") + chalk.gray("   Discord Automation Panel       ") + chalk.red("##"));
+      console.log(chalk.red("  ######################################"));
       console.log("");
     }
     function log2(msg, type = "info") {
@@ -49799,25 +49800,21 @@ var require_menu = __commonJS({
         }]);
         if (action === "back") return;
         if (action === "add") {
-          console.log(chalk.gray("\n  Cole os tokens \u2014 um por linha OU separados por virgula."));
-          console.log(chalk.gray("  Suporta ate 100 tokens de uma vez."));
-          console.log(chalk.gray("  Linha em branco para finalizar.\n"));
-          const linhas = [];
-          const rl = require("readline").createInterface({ input: process.stdin, output: process.stdout });
-          await new Promise((resolve) => {
-            rl.on("line", (line) => {
-              if (!line.trim()) {
-                rl.close();
-                resolve();
-              } else linhas.push(line);
-            });
-          });
-          const novos = linhas.flatMap((l) => l.split(",")).map((t) => t.trim()).filter(Boolean);
+          console.log(chalk.gray("\n  Cole todos os tokens de uma vez, separados por virgula."));
+          console.log(chalk.gray("  Ex: token1,token2,token3  (suporta ate 100)\n"));
+          const { raw } = await inquirer.prompt([{
+            type: "input",
+            name: "raw",
+            message: "Cole os tokens (separados por virgula):"
+          }]);
+          const novos = raw.split(",").map((t) => t.trim()).filter(Boolean);
           const antes = config.tokens.length;
           config.tokens = [.../* @__PURE__ */ new Set([...config.tokens, ...novos])].slice(0, 100);
           cfg.save(config);
+          console.log("");
           log2(`${config.tokens.length - antes} token(s) adicionado(s). Total: ${config.tokens.length}/100`, "ok");
-          await new Promise((r) => setTimeout(r, 1800));
+          console.log("");
+          await pressEnter();
         }
         if (action === "list") {
           if (!config.tokens.length) {

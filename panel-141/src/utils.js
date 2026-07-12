@@ -4,16 +4,17 @@ const chalk = require('chalk');
 function banner() {
   console.clear();
   console.log('');
-  console.log(chalk.red('  ██████╗  ██╗  ██╗ ██╗'));
-  console.log(chalk.red('  ╚════██╗ ██║  ██║ ██║'));
-  console.log(chalk.red('      ██╔╝ ███████║ ██║'));
-  console.log(chalk.red('     ██╔╝  ╚════██║ ╚═╝'));
-  console.log(chalk.red('    ██████╗      ██║ ██╗'));
-  console.log(chalk.red('    ╚═════╝      ╚═╝ ╚═╝'));
-  console.log('');
-  console.log(chalk.gray('  ─────────────────────────────────────'));
-  console.log(chalk.white('     PAINEL ') + chalk.red('141') + chalk.white(' — Discord Panel'));
-  console.log(chalk.gray('  ─────────────────────────────────────'));
+  console.log(chalk.red('  ######################################'));
+  console.log(chalk.red('  ##                                  ##'));
+  console.log(chalk.red('  ##    __ ') + chalk.white('  _  _  __ ') + chalk.red('               ##'));
+  console.log(chalk.red('  ##   /  |') + chalk.white(' | || | \ \\') + chalk.red('               ##'));
+  console.log(chalk.red('  ##   | | ') + chalk.white(' | || |  > >') + chalk.red('              ##'));
+  console.log(chalk.red('  ##   |_| ') + chalk.white('  \_/  /_/ ') + chalk.red('               ##'));
+  console.log(chalk.red('  ##                                  ##'));
+  console.log(chalk.red('  ######################################'));
+  console.log(chalk.red('  ##') + chalk.white('   P A I N E L  ') + chalk.red.bold('1 4 1') + chalk.white('         ') + chalk.red('##'));
+  console.log(chalk.red('  ##') + chalk.gray('   Discord Automation Panel       ') + chalk.red('##'));
+  console.log(chalk.red('  ######################################'));
   console.log('');
 }
 

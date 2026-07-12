@@ -31,30 +31,28 @@ async function menuTokens(config) {
     if (action === 'back') return;
 
     if (action === 'add') {
-      console.log(chalk.gray('\n  Cole os tokens — um por linha OU separados por virgula.'));
-      console.log(chalk.gray('  Suporta ate 100 tokens de uma vez.'));
-      console.log(chalk.gray('  Linha em branco para finalizar.\n'));
+      console.log(chalk.gray('\n  Cole todos os tokens de uma vez, separados por virgula.'));
+      console.log(chalk.gray('  Ex: token1,token2,token3  (suporta ate 100)\n'));
 
-      const linhas = [];
-      const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
-      await new Promise(resolve => {
-        rl.on('line', line => {
-          if (!line.trim()) { rl.close(); resolve(); }
-          else linhas.push(line);
-        });
-      });
+      const { raw } = await inquirer.prompt([{
+        type: 'input',
+        name: 'raw',
+        message: 'Cole os tokens (separados por virgula):',
+      }]);
 
-      // Aceita tokens separados por virgula OU um por linha
-      const novos = linhas
-        .flatMap(l => l.split(','))
+      const novos = raw
+        .split(',')
         .map(t => t.trim())
         .filter(Boolean);
 
       const antes = config.tokens.length;
       config.tokens = [...new Set([...config.tokens, ...novos])].slice(0, 100);
       cfg.save(config);
+
+      console.log('');
       log(`${config.tokens.length - antes} token(s) adicionado(s). Total: ${config.tokens.length}/100`, 'ok');
-      await new Promise(r => setTimeout(r, 1800));
+      console.log('');
+      await pressEnter();
     }
 
     if (action === 'list') {

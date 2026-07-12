@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-#!/usr/bin/env node
 "use strict";
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
@@ -49756,8 +49755,7 @@ var require_config2 = __commonJS({
       channels: [],
       simultaneousUsers: 1,
       message: "",
-      mediaPath: "",
-      delayMs: 1e3
+      mediaPath: ""
     };
     function load() {
       try {

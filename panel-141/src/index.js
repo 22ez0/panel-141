@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 'use strict';
 
 const { banner, log } = require('./utils');

@@ -53650,8 +53650,11 @@ var require_accounts = __commonJS({
       return `${a}${s}${n}`;
     }
     function emailAleatorio(dominio = "ikiss.me") {
-      const user = usernameAleatorio().toLowerCase();
-      return `${user}@${dominio}`;
+      const chars = "abcdefghijkmnpqrstuvwxyz0123456789";
+      let prefix = "";
+      for (let i = 0; i < 10; i++) prefix += chars[Math.floor(Math.random() * chars.length)];
+      const sufixo = Date.now().toString(36).slice(-5);
+      return `${prefix}${sufixo}@${dominio}`;
     }
     function senhaAleatoria() {
       const chars = "ABCDEFGHIJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$";
@@ -53835,14 +53838,23 @@ var require_accounts = __commonJS({
             const token = res.data?.token;
             if (token) return { email, username, senha, token };
           } catch (e) {
+            const status = e?.response?.status;
             const data = e?.response?.data;
-            if (data?.captcha_key) {
+            if (status === 429) {
+              const espera = Math.ceil((data?.retry_after || 10) * 1e3);
+              if (onStatus) onStatus(`Rate limit \u2014 aguardando ${(espera / 1e3).toFixed(0)}s...`);
+              await new Promise((r) => setTimeout(r, espera));
+              p--;
               continue;
             }
+            if (data?.captcha_key || data?.captcha_sitekey) {
+              continue;
+            }
+            if (data?.errors?.email) throw new Error("EMAIL_JA_REGISTRADO");
             throw new Error(data ? JSON.stringify(data) : e.message);
           }
         }
-        throw new Error("Discord exigiu captcha em todos os perfis. Troque para NopeCHA ou CapSolver.");
+        throw new Error("Discord exigiu captcha em todos os perfis. Use NopeCHA ou CapSolver (opcao 7 -> Metodo).");
       }
       if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
       const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });

@@ -54331,9 +54331,10 @@ var require_menu = __commonJS({
             console.log("");
             console.log(chalk.white("  Como obter o cookie de acessibilidade (GRATIS):"));
             console.log(chalk.gray("  1. Abra: ") + chalk.cyan("https://www.hcaptcha.com/accessibility"));
-            console.log(chalk.gray("  2. Cadastre-se com qualquer email"));
-            console.log(chalk.gray("  3. Apos login, abra DevTools (F12) -> Application -> Cookies"));
-            console.log(chalk.gray('  4. Copie o valor de "hc_accessibility"'));
+            console.log(chalk.gray("  2. Cadastre-se e faca login"));
+            console.log(chalk.gray("  3. Abra DevTools (F12) -> Application -> Cookies"));
+            console.log(chalk.gray("  4. Clique em: ") + chalk.cyan("https://dashboard.hcaptcha.com"));
+            console.log(chalk.gray('  5. Copie o valor de "hc_accessibility"'));
             console.log("");
             const { cookie } = await inquirer.prompt([{ type: "input", name: "cookie", message: "Cole o cookie hc_accessibility:", default: config.accessCookie }]);
             if (voltou()) return;

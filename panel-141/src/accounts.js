@@ -8,6 +8,7 @@ const path  = require('path');
 
 const BASE    = 'https://discord.com/api/v9';
 const CAPS    = 'https://api.capsolver.com';
+const NOPECHA = 'https://api.nopecha.com';
 const SITE_KEY   = '4c672d35-0701-42b2-88c3-78380b0db560'; // Discord hCaptcha
 const SITE_URL   = 'https://discord.com';
 
@@ -112,7 +113,39 @@ async function resolverAccessibility(accessCookie) {
   return token;
 }
 
-// Metodo 3: Manual — usuario resolve no browser e cola o token
+// Metodo 3: NopeCHA (gratis — 1000 resolucoes/mes)
+// Crie conta em https://nopecha.com e copie a API key
+async function resolverNopecha(nopechaKey, onStatus) {
+  if (onStatus) onStatus('NopeCHA: enviando tarefa...');
+  // Cria tarefa
+  const createRes = await axios.post(NOPECHA, {
+    type: 'hcaptcha',
+    key: nopechaKey,
+    sitekey: SITE_KEY,
+    url: SITE_URL,
+  }, { timeout: 15000 });
+
+  if (createRes.data?.error) throw new Error(`NopeCHA: ${createRes.data.error}`);
+  const taskId = createRes.data?.data;
+  if (!taskId) throw new Error(`NopeCHA: resposta inesperada: ${JSON.stringify(createRes.data)}`);
+
+  if (onStatus) onStatus(`NopeCHA: aguardando resolucao (ID: ${taskId})...`);
+
+  // Aguarda resultado (polling a cada 3s, max 2min)
+  for (let i = 0; i < 40; i++) {
+    await new Promise(r => setTimeout(r, 3000));
+    const res = await axios.get(NOPECHA, {
+      params: { type: 'hcaptcha', key: nopechaKey, id: taskId },
+      timeout: 10000,
+    });
+    if (res.data?.error) throw new Error(`NopeCHA erro: ${res.data.error}`);
+    const token = res.data?.data?.[0];
+    if (token) return token;
+  }
+  throw new Error('NopeCHA timeout — nao resolvido em 120s');
+}
+
+// Metodo 4: Manual — usuario resolve no browser e cola o token
 async function resolverManual(onStatus) {
   if (onStatus) onStatus(
     'Abra no browser: https://discord.com/register\n' +
@@ -127,17 +160,18 @@ async function resolverManual(onStatus) {
 }
 
 // Dispatcher — escolhe o metodo certo
-async function resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
-  if (metodo === 'capsolver') return await resolverCapSolver(capsolverKey);
+async function resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
+  if (metodo === 'nopecha')       return await resolverNopecha(nopechaKey, onStatus);
+  if (metodo === 'capsolver')     return await resolverCapSolver(capsolverKey);
   if (metodo === 'acessibilidade') return await resolverAccessibility(accessCookie);
-  if (metodo === 'manual') return tokenManual; // ja foi coletado pelo menu
+  if (metodo === 'manual')        return tokenManual; // ja foi coletado pelo menu
   throw new Error('Metodo de captcha nao definido');
 }
 
 // Registra uma conta no Discord
-async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
+async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
   if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-  const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus });
+  const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
 
   if (onStatus) onStatus(`Registrando ${username}...`);
   const headers = {

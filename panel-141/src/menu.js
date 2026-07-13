@@ -402,7 +402,7 @@ async function menuVoz(config) {
 }
 
 // ─── 7. CRIAR CONTAS ─────────────────────────────────────────────────────────
-const METODOS_LABEL = { acessibilidade: 'Acessibilidade hCaptcha (GRATIS)', capsolver: 'CapSolver (pago)', manual: 'Manual (voce resolve no browser)' };
+const METODOS_LABEL = { nopecha: 'NopeCHA (GRATIS 1000/mes)', acessibilidade: 'Acessibilidade hCaptcha (GRATIS)', capsolver: 'CapSolver (pago)', manual: 'Manual (voce resolve no browser)' };
 
 async function menuCriarContas(config) {
   while (true) {
@@ -432,7 +432,11 @@ async function menuCriarContas(config) {
         choices: [
           { name: chalk.gray('<- Voltar'), value: 'voltar' },
           {
-            name: chalk.green('Acessibilidade hCaptcha') + chalk.gray(' — GRATIS, requer cadastro unico em hcaptcha.com'),
+            name: chalk.green('NopeCHA') + chalk.gray(' — GRATIS, 1000 resolucoes/mes, so precisa de API key'),
+            value: 'nopecha',
+          },
+          {
+            name: chalk.green('Acessibilidade hCaptcha') + chalk.gray(' — GRATIS, requer cadastro em hcaptcha.com'),
             value: 'acessibilidade',
           },
           {
@@ -447,6 +451,20 @@ async function menuCriarContas(config) {
       }]);
       if (met === 'voltar' || voltou()) continue;
       config.captchaMetodo = met;
+
+      if (met === 'nopecha') {
+        console.log('');
+        console.log(chalk.white('  Como obter a API key gratuita do NopeCHA:'));
+        console.log(chalk.gray('  1. Abra: ') + chalk.cyan('https://nopecha.com'));
+        console.log(chalk.gray('  2. Crie conta com qualquer email'));
+        console.log(chalk.gray('  3. Va em: Account -> API Key'));
+        console.log(chalk.gray('  4. Copie e cole abaixo'));
+        console.log(chalk.gray('  Limite gratis: 1000 resolucoes por mes'));
+        console.log('');
+        const { k } = await inquirer.prompt([{ type: 'input', name: 'k', message: 'NopeCHA API Key:', default: config.nopechaKey }]);
+        if (voltou()) return;
+        config.nopechaKey = k.trim();
+      }
 
       if (met === 'acessibilidade') {
         console.log('');
@@ -500,6 +518,10 @@ async function menuCriarContas(config) {
     // ── CRIAR ─────────────────────────────────────────────────────────────────
     if (acao === 'criar') {
       // Validacoes por metodo
+      if (config.captchaMetodo === 'nopecha' && !config.nopechaKey) {
+        log('Configure a NopeCHA API Key primeiro (opcao "Escolher metodo").', 'aviso');
+        await new Promise(r => setTimeout(r, 1800)); continue;
+      }
       if (config.captchaMetodo === 'acessibilidade' && !config.accessCookie) {
         log('Configure o cookie de acessibilidade primeiro (opcao "Escolher metodo").', 'aviso');
         await new Promise(r => setTimeout(r, 1800)); continue;
@@ -541,6 +563,7 @@ async function menuCriarContas(config) {
           const conta = await registrarConta({
             email, username: usuario, senha,
             metodo:       config.captchaMetodo,
+            nopechaKey:   config.nopechaKey,
             capsolverKey: config.capsolverKey,
             accessCookie: config.accessCookie,
             tokenManual,

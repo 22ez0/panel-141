@@ -18,9 +18,10 @@ const DEFAULT = {
   streamUrl: 'https://www.twitch.tv/directory',
   streamTitulo: 'Ao vivo',
   // Criacao de contas
-  captchaMetodo: 'acessibilidade', // 'acessibilidade' | 'capsolver' | 'manual'
+  captchaMetodo: 'nopecha', // 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
   accessCookie: '',   // cookie hc_accessibility (gratis)
   capsolverKey: '',   // CapSolver API key (pago)
+  nopechaKey: '',     // NopeCHA API key (gratis 1000/mes)
   emailDominio: 'ikiss.me',
   qtdCriar: 1,
 };

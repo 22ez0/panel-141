@@ -11,16 +11,25 @@ const DEFAULT = {
   channels: [],
   simultaneousUsers: 1,
   message: '',
-  mediaUrls: [],   // lista de URLs de midia (Discord CDN, imgur, etc.)
+  mediaUrls: [],
+  // Personalizacao de contas
+  fotoUrl: '',          // URL ou caminho de arquivo para foto de perfil
+  bio: '',
+  streamUrl: 'https://www.twitch.tv/directory',
+  streamTitulo: 'Ao vivo',
+  // Criacao de contas
+  capsolverKey: '',
+  emailDominio: 'ikiss.me',
+  qtdCriar: 1,
 };
 
 function load() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
       const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-      // compatibilidade com config antiga (mediaPath -> mediaUrls)
+      // compatibilidade: mediaPath antigo
       if (saved.mediaPath && !saved.mediaUrls) {
-        saved.mediaUrls = saved.mediaPath ? [saved.mediaPath] : [];
+        saved.mediaUrls = [saved.mediaPath];
         delete saved.mediaPath;
       }
       return { ...DEFAULT, ...saved };
@@ -29,8 +38,8 @@ function load() {
   return { ...DEFAULT };
 }
 
-function save(cfg) {
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2));
+function save(c) {
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(c, null, 2));
 }
 
 module.exports = { load, save, CONFIG_PATH };

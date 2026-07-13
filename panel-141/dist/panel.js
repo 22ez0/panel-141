@@ -53748,38 +53748,114 @@ var require_accounts = __commonJS({
       if (metodo === "capsolver") return await resolverCapSolver(capsolverKey);
       if (metodo === "acessibilidade") return await resolverAccessibility(accessCookie);
       if (metodo === "manual") return tokenManual;
+      if (metodo === "semcaptcha") return null;
       throw new Error("Metodo de captcha nao definido");
     }
-    async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
-      if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-      const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
-      if (onStatus) onStatus(`Registrando ${username}...`);
-      const headers = {
-        "Content-Type": "application/json",
+    var PERFIS = [
+      // Perfil 1: iOS Discord app
+      {
+        "User-Agent": "Discord/220.0 CFNetwork/1474 Darwin/23.0.0",
+        "X-Super-Properties": Buffer.from(JSON.stringify({
+          os: "iOS",
+          browser: "Discord iOS",
+          device: "iPhone14,3",
+          browser_version: "220.0",
+          os_version: "17.0",
+          referrer: "",
+          referring_domain: "",
+          referrer_current: "",
+          referring_domain_current: "",
+          release_channel: "stable",
+          system_locale: "pt-BR"
+        })).toString("base64"),
+        "X-Discord-Locale": "pt-BR",
+        "X-Discord-Timezone": "America/Sao_Paulo"
+      },
+      // Perfil 2: Android Discord app
+      {
+        "User-Agent": "com.discord/204.5 Android (29; android; generic_x86)",
+        "X-Super-Properties": Buffer.from(JSON.stringify({
+          os: "Android",
+          browser: "Discord Android",
+          device: "android",
+          browser_version: "204.5",
+          os_version: "10",
+          referrer: "",
+          referring_domain: "",
+          release_channel: "stable",
+          system_locale: "pt-BR"
+        })).toString("base64"),
+        "X-Discord-Locale": "pt-BR",
+        "X-Discord-Timezone": "America/Sao_Paulo"
+      },
+      // Perfil 3: Desktop Chrome sem captcha
+      {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "X-Super-Properties": Buffer.from(JSON.stringify({
           os: "Windows",
           browser: "Chrome",
           device: "",
           browser_version: "120.0.0.0",
-          os_version: "10"
+          os_version: "10",
+          referrer: "",
+          referring_domain: "",
+          release_channel: "stable",
+          system_locale: "pt-BR"
         })).toString("base64"),
+        "X-Discord-Locale": "pt-BR",
+        "X-Discord-Timezone": "America/Sao_Paulo"
+      }
+    ];
+    async function tentarRegistrar(username, email, senha, captchaKey, perfilIdx = 0) {
+      const perfil = PERFIS[perfilIdx % PERFIS.length];
+      const headers = {
+        "Content-Type": "application/json",
         Origin: "https://discord.com",
-        Referer: "https://discord.com/register"
+        Referer: "https://discord.com/register",
+        ...perfil
       };
-      const res = await axios.post(`${BASE}/auth/register`, {
+      const body = {
         username,
         email,
         password: senha,
         date_of_birth: "1999-01-15",
         consent: true,
-        captcha_key: captchaKey,
         gift_code_sku_id: null,
         promotional_email_opt_in: false
-      }, { headers, timeout: 15e3 });
-      const token = res.data?.token;
-      if (!token) throw new Error(JSON.stringify(res.data));
-      return { email, username, senha, token };
+      };
+      if (captchaKey) body.captcha_key = captchaKey;
+      return axios.post(`${BASE}/auth/register`, body, { headers, timeout: 15e3 });
+    }
+    async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
+      if (metodo === "semcaptcha") {
+        for (let p = 0; p < PERFIS.length; p++) {
+          if (onStatus) onStatus(`Tentativa sem captcha (perfil ${p + 1}/${PERFIS.length})...`);
+          try {
+            const res = await tentarRegistrar(username, email, senha, null, p);
+            const token = res.data?.token;
+            if (token) return { email, username, senha, token };
+          } catch (e) {
+            const data = e?.response?.data;
+            if (data?.captcha_key) {
+              continue;
+            }
+            throw new Error(data ? JSON.stringify(data) : e.message);
+          }
+        }
+        throw new Error("Discord exigiu captcha em todos os perfis. Troque para NopeCHA ou CapSolver.");
+      }
+      if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
+      const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
+      if (onStatus) onStatus(`Registrando ${username}...`);
+      try {
+        const res = await tentarRegistrar(username, email, senha, captchaKey, 0);
+        const token = res.data?.token;
+        if (!token) throw new Error(JSON.stringify(res.data));
+        return { email, username, senha, token };
+      } catch (e) {
+        const data = e?.response?.data;
+        throw new Error(data ? JSON.stringify(data) : e.message);
+      }
     }
     async function atualizarFoto(token, fotoUrlOuPath) {
       let b64;
@@ -53870,8 +53946,8 @@ var require_config2 = __commonJS({
       streamUrl: "https://www.twitch.tv/directory",
       streamTitulo: "Ao vivo",
       // Criacao de contas
-      captchaMetodo: "nopecha",
-      // 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
+      captchaMetodo: "semcaptcha",
+      // 'semcaptcha' | 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
       accessCookie: "",
       // cookie hc_accessibility (gratis)
       capsolverKey: "",
@@ -54371,7 +54447,7 @@ var require_menu = __commonJS({
         }
       }
     }
-    var METODOS_LABEL = { nopecha: "NopeCHA (GRATIS 1000/mes)", acessibilidade: "Acessibilidade hCaptcha (GRATIS)", capsolver: "CapSolver (pago)", manual: "Manual (voce resolve no browser)" };
+    var METODOS_LABEL = { semcaptcha: "Sem Captcha (tenta automatico)", nopecha: "NopeCHA (GRATIS 1000/mes)", acessibilidade: "Acessibilidade hCaptcha (GRATIS)", capsolver: "CapSolver (pago)", manual: "Manual (voce resolve no browser)" };
     async function menuCriarContas(config) {
       while (true) {
         banner2();
@@ -54400,6 +54476,10 @@ var require_menu = __commonJS({
             message: "Metodo de resolucao de captcha:",
             choices: [
               { name: chalk.gray("<- Voltar"), value: "voltar" },
+              {
+                name: chalk.green.bold("Sem Captcha") + chalk.gray(" \u2014 tenta 3 perfis diferentes sem resolver nada"),
+                value: "semcaptcha"
+              },
               {
                 name: chalk.green("NopeCHA") + chalk.gray(" \u2014 GRATIS, 1000 resolucoes/mes, so precisa de API key"),
                 value: "nopecha"
@@ -54476,6 +54556,8 @@ var require_menu = __commonJS({
           await new Promise((r) => setTimeout(r, 600));
         }
         if (acao === "criar") {
+          if (config.captchaMetodo === "semcaptcha") {
+          }
           if (config.captchaMetodo === "nopecha" && !config.nopechaKey) {
             log2('Configure a NopeCHA API Key primeiro (opcao "Escolher metodo").', "aviso");
             await new Promise((r) => setTimeout(r, 1800));

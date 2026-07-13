@@ -246,7 +246,21 @@ async function atualizarStatus(token, status = 'invisible') {
   return res.data;
 }
 
+// Salva lista de contas criadas em tokens_criados.txt na mesma pasta do painel
+function salvarTokensTxt(contas, dirPath) {
+  const linhas = contas.map(c =>
+    `${c.token} | ${c.username} | ${c.email} | ${c.senha}`
+  ).join('\n');
+  const arquivo = require('path').join(dirPath, 'tokens_criados.txt');
+  const existente = (() => {
+    try { return require('fs').readFileSync(arquivo, 'utf8'); } catch { return ''; }
+  })();
+  const conteudo = existente ? existente + '\n' + linhas : linhas;
+  require('fs').writeFileSync(arquivo, conteudo + '\n');
+  return arquivo;
+}
+
 module.exports = {
   usernameAleatorio, emailAleatorio, senhaAleatoria,
-  registrarConta, atualizarFoto, atualizarBio, atualizarStatus,
+  registrarConta, atualizarFoto, atualizarBio, atualizarStatus, salvarTokensTxt,
 };

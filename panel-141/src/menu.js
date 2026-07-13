@@ -6,7 +6,8 @@ const { voltou }       = require('./goback');
 const { validateToken, getChannels, loopConta } = require('./discord');
 const { abrir, atualizarPresenca, entrarVoz, sairVoz, fecharTodos } = require('./gateway');
 const { usernameAleatorio, emailAleatorio, senhaAleatoria,
-        registrarConta, atualizarFoto, atualizarBio, atualizarStatus } = require('./accounts');
+        registrarConta, atualizarFoto, atualizarBio, atualizarStatus, salvarTokensTxt } = require('./accounts');
+const { entrarServidor } = require('./discord');
 const cfg = require('./config');
 
 async function pressEnter() {
@@ -263,16 +264,22 @@ async function menuPersonalizar(config) {
     }
 
     if (acao === 'stream') {
-      log(`Conectando ${tokens.length} conta(s) ao gateway para streaming...`, 'info');
+      if (!config.streamUrl || !config.streamUrl.includes('twitch.tv/')) {
+        log('Configure a URL do streaming primeiro (Definir URL e titulo).', 'aviso');
+        log('Precisa ser twitch.tv/SEU_CANAL — ex: https://www.twitch.tv/xqc', 'aviso');
+        await new Promise(r => setTimeout(r, 2000)); continue;
+      }
+      log(`Conectando ${tokens.length} conta(s) ao gateway para streaming RPC...`, 'info');
       let ok = 0;
       for (const token of tokens) {
         try {
           await abrir(token, { status: 'online', streaming: true, streamUrl: config.streamUrl, streamTitle: config.streamTitulo });
           ok++;
-          log(`Conta ${ok}/${tokens.length} → streaming ativo`, 'ok');
+          log(`Conta ${ok}/${tokens.length} streaming ativo`, 'ok');
         } catch (e) { log(`Erro gateway: ${e.message}`, 'erro'); }
+        await new Promise(r => setTimeout(r, 400));
       }
-      log(`Streaming ativo em ${ok} conta(s). Mantenha o painel aberto.`, 'ok');
+      log(`Streaming ativo em ${ok} conta(s). NAO feche o painel.`, 'ok');
       await pressEnter();
       if (voltou()) return;
     }
@@ -593,6 +600,13 @@ async function menuCriarContas(config) {
         console.log('');
         log('Tokens salvos automaticamente (opcao 1).', 'ok');
 
+        // Salva tambem em tokens_criados.txt
+        try {
+          const dirPath = require('path').dirname(process.argv[1] || __filename);
+          const arq = salvarTokensTxt(criadas, dirPath);
+          log(`Backup salvo em: tokens_criados.txt`, 'ok');
+        } catch (e) { log(`Nao foi possivel salvar txt: ${e.message}`, 'aviso'); }
+
         if (config.fotoUrl || config.bio) {
           log('Aplicando foto/bio...', 'info');
           for (const c of criadas) {
@@ -610,6 +624,60 @@ async function menuCriarContas(config) {
         }
       }
 
+      await pressEnter();
+      if (voltou()) return;
+    }
+  }
+}
+
+// ─── 8. ENTRAR EM SERVIDOR ───────────────────────────────────────────────────
+async function menuEntrarServidor(config) {
+  while (true) {
+    banner();
+    console.log(chalk.yellow('  [ 8. ENTRAR EM SERVIDOR VIA CONVITE ]\n'));
+    console.log(chalk.gray('  Faz todas as contas ativas entrarem num servidor via link de convite.'));
+    console.log(chalk.gray('  Nao precisa de captcha — funciona com tokens ja existentes.\n'));
+    console.log(chalk.gray('  Tokens ativos: ') + chalk.white(Math.min(config.tokens.length, config.simultaneousUsers)) + '\n');
+
+    const { acao } = await inquirer.prompt([{
+      type: 'list', name: 'acao', message: 'Opcao:',
+      choices: [
+        { name: chalk.gray('<- Voltar'), value: 'voltar' },
+        { name: chalk.red('> ENTRAR NO SERVIDOR AGORA'), value: 'entrar' },
+      ],
+    }]);
+    if (acao === 'voltar' || voltou()) return;
+
+    if (acao === 'entrar') {
+      const { link } = await inquirer.prompt([{
+        type: 'input', name: 'link',
+        message: 'Link ou codigo do convite (ex: discord.gg/abc123 ou so "abc123"):',
+      }]);
+      if (voltou() || !link.trim()) continue;
+
+      const tokens = config.tokens.slice(0, config.simultaneousUsers);
+      if (!tokens.length) { log('Nenhum token configurado (opcao 1).', 'aviso'); await new Promise(r => setTimeout(r, 1500)); continue; }
+
+      log(`Entrando em ${tokens.length} conta(s)...`, 'info');
+      let ok = 0, err = 0;
+
+      for (let i = 0; i < tokens.length; i++) {
+        try {
+          const res = await entrarServidor(tokens[i], link.trim());
+          const nomeServidor = res?.guild?.name || res?.channel?.name || 'servidor';
+          ok++;
+          log(`[${i+1}/${tokens.length}] Entrou em: ${nomeServidor}`, 'ok');
+        } catch (e) {
+          err++;
+          const msg = e?.response?.data?.message || e.message;
+          log(`[${i+1}/${tokens.length}] Erro: ${msg}`, 'erro');
+        }
+        if (i < tokens.length - 1) await new Promise(r => setTimeout(r, 800));
+      }
+
+      console.log('');
+      console.log(chalk.green(`  Sucesso: ${ok}`) + '  ' + (err ? chalk.red(`Erros: ${err}`) : ''));
+      console.log('');
       await pressEnter();
       if (voltou()) return;
     }
@@ -678,7 +746,7 @@ function exibirStatus(config) {
     ln('Canais:',   `${chalk.white(config.channels.length)} texto`),
     ln('Mensagem:', msg),
     ln('Midias:',   `${chalk.white(config.mediaUrls.length)} URL(s)`),
-    ln('CapSolver:', config.capsolverKey ? chalk.green('configurado') : chalk.gray('nao config')),
+    ln('Captcha:', chalk.white(config.captchaMetodo || 'nao config')),
     chalk.gray('  +==========================================+'),
     '',
   ].join('\n');
@@ -702,7 +770,8 @@ async function menuPrincipal() {
         { name: `${chalk.cyan('5.')} Personalizar Contas (foto/bio/RPC)`,    value: '5' },
         { name: `${chalk.cyan('6.')} Canais de Voz`,                         value: '6' },
         { name: `${chalk.cyan('7.')} Criar Contas Discord`,                  value: '7' },
-        { name: `${chalk.red('>')}  ${chalk.red.bold('INICIAR ENVIO')}`,    value: '8' },
+        { name: `${chalk.cyan('8.')} Entrar em Servidor (convite)`,          value: '8' },
+        { name: `${chalk.red('>')}  ${chalk.red.bold('INICIAR ENVIO')}`,    value: '9' },
         new inquirer.Separator(),
         { name: chalk.gray('Sair'), value: '0' },
       ],
@@ -710,14 +779,15 @@ async function menuPrincipal() {
 
     if (voltou()) continue;
     if (opcao === '0') { fecharTodos(); console.log(chalk.gray('\n  Painel 141 encerrado.\n')); process.exit(0); }
-    if (opcao === '1') { await menuTokens(config);       config = cfg.load(); }
-    if (opcao === '2') { await menuContas(config);       config = cfg.load(); }
-    if (opcao === '3') { await menuServidor(config);     config = cfg.load(); }
-    if (opcao === '4') { await menuMensagem(config);     config = cfg.load(); }
-    if (opcao === '5') { await menuPersonalizar(config); config = cfg.load(); }
-    if (opcao === '6') { await menuVoz(config);          config = cfg.load(); }
-    if (opcao === '7') { await menuCriarContas(config);  config = cfg.load(); }
-    if (opcao === '8') { await menuIniciar(config);      config = cfg.load(); }
+    if (opcao === '1') { await menuTokens(config);          config = cfg.load(); }
+    if (opcao === '2') { await menuContas(config);          config = cfg.load(); }
+    if (opcao === '3') { await menuServidor(config);        config = cfg.load(); }
+    if (opcao === '4') { await menuMensagem(config);        config = cfg.load(); }
+    if (opcao === '5') { await menuPersonalizar(config);    config = cfg.load(); }
+    if (opcao === '6') { await menuVoz(config);             config = cfg.load(); }
+    if (opcao === '7') { await menuCriarContas(config);     config = cfg.load(); }
+    if (opcao === '8') { await menuEntrarServidor(config);  config = cfg.load(); }
+    if (opcao === '9') { await menuIniciar(config);         config = cfg.load(); }
   }
 }
 

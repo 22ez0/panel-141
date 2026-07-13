@@ -409,7 +409,7 @@ async function menuVoz(config) {
 }
 
 // ─── 7. CRIAR CONTAS ─────────────────────────────────────────────────────────
-const METODOS_LABEL = { nopecha: 'NopeCHA (GRATIS 1000/mes)', acessibilidade: 'Acessibilidade hCaptcha (GRATIS)', capsolver: 'CapSolver (pago)', manual: 'Manual (voce resolve no browser)' };
+const METODOS_LABEL = { semcaptcha: 'Sem Captcha (tenta automatico)', nopecha: 'NopeCHA (GRATIS 1000/mes)', acessibilidade: 'Acessibilidade hCaptcha (GRATIS)', capsolver: 'CapSolver (pago)', manual: 'Manual (voce resolve no browser)' };
 
 async function menuCriarContas(config) {
   while (true) {
@@ -438,6 +438,10 @@ async function menuCriarContas(config) {
         type: 'list', name: 'met', message: 'Metodo de resolucao de captcha:',
         choices: [
           { name: chalk.gray('<- Voltar'), value: 'voltar' },
+          {
+            name: chalk.green.bold('Sem Captcha') + chalk.gray(' — tenta 3 perfis diferentes sem resolver nada'),
+            value: 'semcaptcha',
+          },
           {
             name: chalk.green('NopeCHA') + chalk.gray(' — GRATIS, 1000 resolucoes/mes, so precisa de API key'),
             value: 'nopecha',
@@ -525,6 +529,7 @@ async function menuCriarContas(config) {
     // ── CRIAR ─────────────────────────────────────────────────────────────────
     if (acao === 'criar') {
       // Validacoes por metodo
+      if (config.captchaMetodo === 'semcaptcha') { /* sem validacao, tenta direto */ }
       if (config.captchaMetodo === 'nopecha' && !config.nopechaKey) {
         log('Configure a NopeCHA API Key primeiro (opcao "Escolher metodo").', 'aviso');
         await new Promise(r => setTimeout(r, 1800)); continue;

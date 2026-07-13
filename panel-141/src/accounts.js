@@ -161,45 +161,111 @@ async function resolverManual(onStatus) {
 
 // Dispatcher — escolhe o metodo certo
 async function resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
-  if (metodo === 'nopecha')       return await resolverNopecha(nopechaKey, onStatus);
-  if (metodo === 'capsolver')     return await resolverCapSolver(capsolverKey);
+  if (metodo === 'nopecha')        return await resolverNopecha(nopechaKey, onStatus);
+  if (metodo === 'capsolver')      return await resolverCapSolver(capsolverKey);
   if (metodo === 'acessibilidade') return await resolverAccessibility(accessCookie);
-  if (metodo === 'manual')        return tokenManual; // ja foi coletado pelo menu
+  if (metodo === 'manual')         return tokenManual;
+  if (metodo === 'semcaptcha')     return null; // tenta sem captcha
   throw new Error('Metodo de captcha nao definido');
 }
 
-// Registra uma conta no Discord
-async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
-  if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-  const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
-
-  if (onStatus) onStatus(`Registrando ${username}...`);
-  const headers = {
-    'Content-Type': 'application/json',
+// Diferentes perfis de headers para tentar passar sem captcha
+const PERFIS = [
+  // Perfil 1: iOS Discord app
+  {
+    'User-Agent': 'Discord/220.0 CFNetwork/1474 Darwin/23.0.0',
+    'X-Super-Properties': Buffer.from(JSON.stringify({
+      os: 'iOS', browser: 'Discord iOS', device: 'iPhone14,3',
+      browser_version: '220.0', os_version: '17.0',
+      referrer: '', referring_domain: '',
+      referrer_current: '', referring_domain_current: '',
+      release_channel: 'stable', system_locale: 'pt-BR',
+    })).toString('base64'),
+    'X-Discord-Locale': 'pt-BR',
+    'X-Discord-Timezone': 'America/Sao_Paulo',
+  },
+  // Perfil 2: Android Discord app
+  {
+    'User-Agent': 'com.discord/204.5 Android (29; android; generic_x86)',
+    'X-Super-Properties': Buffer.from(JSON.stringify({
+      os: 'Android', browser: 'Discord Android', device: 'android',
+      browser_version: '204.5', os_version: '10',
+      referrer: '', referring_domain: '',
+      release_channel: 'stable', system_locale: 'pt-BR',
+    })).toString('base64'),
+    'X-Discord-Locale': 'pt-BR',
+    'X-Discord-Timezone': 'America/Sao_Paulo',
+  },
+  // Perfil 3: Desktop Chrome sem captcha
+  {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
     'X-Super-Properties': Buffer.from(JSON.stringify({
       os: 'Windows', browser: 'Chrome', device: '',
       browser_version: '120.0.0.0', os_version: '10',
+      referrer: '', referring_domain: '',
+      release_channel: 'stable', system_locale: 'pt-BR',
     })).toString('base64'),
-    Origin: 'https://discord.com',
-    Referer: 'https://discord.com/register',
-  };
+    'X-Discord-Locale': 'pt-BR',
+    'X-Discord-Timezone': 'America/Sao_Paulo',
+  },
+];
 
-  const res = await axios.post(`${BASE}/auth/register`, {
-    username,
-    email,
+async function tentarRegistrar(username, email, senha, captchaKey, perfilIdx = 0) {
+  const perfil = PERFIS[perfilIdx % PERFIS.length];
+  const headers = {
+    'Content-Type': 'application/json',
+    Origin:  'https://discord.com',
+    Referer: 'https://discord.com/register',
+    ...perfil,
+  };
+  const body = {
+    username, email,
     password: senha,
     date_of_birth: '1999-01-15',
     consent: true,
-    captcha_key: captchaKey,
     gift_code_sku_id: null,
     promotional_email_opt_in: false,
-  }, { headers, timeout: 15000 });
+  };
+  if (captchaKey) body.captcha_key = captchaKey;
 
-  // Sucesso retorna { token: '...' }
-  const token = res.data?.token;
-  if (!token) throw new Error(JSON.stringify(res.data));
-  return { email, username, senha, token };
+  return axios.post(`${BASE}/auth/register`, body, { headers, timeout: 15000 });
+}
+
+// Registra uma conta no Discord
+async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
+  // Modo sem captcha: tenta todos os perfis sem resolver nada
+  if (metodo === 'semcaptcha') {
+    for (let p = 0; p < PERFIS.length; p++) {
+      if (onStatus) onStatus(`Tentativa sem captcha (perfil ${p + 1}/${PERFIS.length})...`);
+      try {
+        const res = await tentarRegistrar(username, email, senha, null, p);
+        const token = res.data?.token;
+        if (token) return { email, username, senha, token };
+      } catch (e) {
+        const data = e?.response?.data;
+        // Se Discord pede captcha, tenta proximo perfil
+        if (data?.captcha_key) { continue; }
+        // Outro erro (rate limit, etc.)
+        throw new Error(data ? JSON.stringify(data) : e.message);
+      }
+    }
+    throw new Error('Discord exigiu captcha em todos os perfis. Troque para NopeCHA ou CapSolver.');
+  }
+
+  // Modos com captcha
+  if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
+  const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
+
+  if (onStatus) onStatus(`Registrando ${username}...`);
+  try {
+    const res = await tentarRegistrar(username, email, senha, captchaKey, 0);
+    const token = res.data?.token;
+    if (!token) throw new Error(JSON.stringify(res.data));
+    return { email, username, senha, token };
+  } catch (e) {
+    const data = e?.response?.data;
+    throw new Error(data ? JSON.stringify(data) : e.message);
+  }
 }
 
 // Atualiza foto de perfil (base64 ou URL)

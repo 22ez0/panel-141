@@ -18,7 +18,7 @@ const DEFAULT = {
   streamUrl: 'https://www.twitch.tv/directory',
   streamTitulo: 'Ao vivo',
   // Criacao de contas
-  captchaMetodo: 'nopecha', // 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
+  captchaMetodo: 'semcaptcha', // 'semcaptcha' | 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
   accessCookie: '',   // cookie hc_accessibility (gratis)
   capsolverKey: '',   // CapSolver API key (pago)
   nopechaKey: '',     // NopeCHA API key (gratis 1000/mes)

@@ -53603,6 +53603,7 @@ var require_accounts = __commonJS({
     var path = require("path");
     var BASE = "https://discord.com/api/v9";
     var CAPS = "https://api.capsolver.com";
+    var NOPECHA = "https://api.nopecha.com";
     var SITE_KEY = "4c672d35-0701-42b2-88c3-78380b0db560";
     var SITE_URL = "https://discord.com";
     var ADJ = ["cool", "dark", "red", "blue", "fast", "epic", "lone", "iron", "neo", "sky", "void", "zero", "alpha", "beta", "rogue"];
@@ -53683,15 +53684,40 @@ var require_accounts = __commonJS({
       if (!token) throw new Error("Accessibility nao retornou token. Cookie pode estar expirado.");
       return token;
     }
-    async function resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
+    async function resolverNopecha(nopechaKey, onStatus) {
+      if (onStatus) onStatus("NopeCHA: enviando tarefa...");
+      const createRes = await axios.post(NOPECHA, {
+        type: "hcaptcha",
+        key: nopechaKey,
+        sitekey: SITE_KEY,
+        url: SITE_URL
+      }, { timeout: 15e3 });
+      if (createRes.data?.error) throw new Error(`NopeCHA: ${createRes.data.error}`);
+      const taskId = createRes.data?.data;
+      if (!taskId) throw new Error(`NopeCHA: resposta inesperada: ${JSON.stringify(createRes.data)}`);
+      if (onStatus) onStatus(`NopeCHA: aguardando resolucao (ID: ${taskId})...`);
+      for (let i = 0; i < 40; i++) {
+        await new Promise((r) => setTimeout(r, 3e3));
+        const res = await axios.get(NOPECHA, {
+          params: { type: "hcaptcha", key: nopechaKey, id: taskId },
+          timeout: 1e4
+        });
+        if (res.data?.error) throw new Error(`NopeCHA erro: ${res.data.error}`);
+        const token = res.data?.data?.[0];
+        if (token) return token;
+      }
+      throw new Error("NopeCHA timeout \u2014 nao resolvido em 120s");
+    }
+    async function resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
+      if (metodo === "nopecha") return await resolverNopecha(nopechaKey, onStatus);
       if (metodo === "capsolver") return await resolverCapSolver(capsolverKey);
       if (metodo === "acessibilidade") return await resolverAccessibility(accessCookie);
       if (metodo === "manual") return tokenManual;
       throw new Error("Metodo de captcha nao definido");
     }
-    async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
+    async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
       if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-      const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus });
+      const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
       if (onStatus) onStatus(`Registrando ${username}...`);
       const headers = {
         "Content-Type": "application/json",
@@ -53792,12 +53818,14 @@ var require_config2 = __commonJS({
       streamUrl: "https://www.twitch.tv/directory",
       streamTitulo: "Ao vivo",
       // Criacao de contas
-      captchaMetodo: "acessibilidade",
-      // 'acessibilidade' | 'capsolver' | 'manual'
+      captchaMetodo: "nopecha",
+      // 'nopecha' | 'acessibilidade' | 'capsolver' | 'manual'
       accessCookie: "",
       // cookie hc_accessibility (gratis)
       capsolverKey: "",
       // CapSolver API key (pago)
+      nopechaKey: "",
+      // NopeCHA API key (gratis 1000/mes)
       emailDominio: "ikiss.me",
       qtdCriar: 1
     };
@@ -54282,7 +54310,7 @@ var require_menu = __commonJS({
         }
       }
     }
-    var METODOS_LABEL = { acessibilidade: "Acessibilidade hCaptcha (GRATIS)", capsolver: "CapSolver (pago)", manual: "Manual (voce resolve no browser)" };
+    var METODOS_LABEL = { nopecha: "NopeCHA (GRATIS 1000/mes)", acessibilidade: "Acessibilidade hCaptcha (GRATIS)", capsolver: "CapSolver (pago)", manual: "Manual (voce resolve no browser)" };
     async function menuCriarContas(config) {
       while (true) {
         banner2();
@@ -54312,7 +54340,11 @@ var require_menu = __commonJS({
             choices: [
               { name: chalk.gray("<- Voltar"), value: "voltar" },
               {
-                name: chalk.green("Acessibilidade hCaptcha") + chalk.gray(" \u2014 GRATIS, requer cadastro unico em hcaptcha.com"),
+                name: chalk.green("NopeCHA") + chalk.gray(" \u2014 GRATIS, 1000 resolucoes/mes, so precisa de API key"),
+                value: "nopecha"
+              },
+              {
+                name: chalk.green("Acessibilidade hCaptcha") + chalk.gray(" \u2014 GRATIS, requer cadastro em hcaptcha.com"),
                 value: "acessibilidade"
               },
               {
@@ -54327,6 +54359,19 @@ var require_menu = __commonJS({
           }]);
           if (met === "voltar" || voltou()) continue;
           config.captchaMetodo = met;
+          if (met === "nopecha") {
+            console.log("");
+            console.log(chalk.white("  Como obter a API key gratuita do NopeCHA:"));
+            console.log(chalk.gray("  1. Abra: ") + chalk.cyan("https://nopecha.com"));
+            console.log(chalk.gray("  2. Crie conta com qualquer email"));
+            console.log(chalk.gray("  3. Va em: Account -> API Key"));
+            console.log(chalk.gray("  4. Copie e cole abaixo"));
+            console.log(chalk.gray("  Limite gratis: 1000 resolucoes por mes"));
+            console.log("");
+            const { k } = await inquirer.prompt([{ type: "input", name: "k", message: "NopeCHA API Key:", default: config.nopechaKey }]);
+            if (voltou()) return;
+            config.nopechaKey = k.trim();
+          }
           if (met === "acessibilidade") {
             console.log("");
             console.log(chalk.white("  Como obter o cookie de acessibilidade (GRATIS):"));
@@ -54370,6 +54415,11 @@ var require_menu = __commonJS({
           await new Promise((r) => setTimeout(r, 600));
         }
         if (acao === "criar") {
+          if (config.captchaMetodo === "nopecha" && !config.nopechaKey) {
+            log2('Configure a NopeCHA API Key primeiro (opcao "Escolher metodo").', "aviso");
+            await new Promise((r) => setTimeout(r, 1800));
+            continue;
+          }
           if (config.captchaMetodo === "acessibilidade" && !config.accessCookie) {
             log2('Configure o cookie de acessibilidade primeiro (opcao "Escolher metodo").', "aviso");
             await new Promise((r) => setTimeout(r, 1800));
@@ -54409,6 +54459,7 @@ var require_menu = __commonJS({
                 username: usuario,
                 senha,
                 metodo: config.captchaMetodo,
+                nopechaKey: config.nopechaKey,
                 capsolverKey: config.capsolverKey,
                 accessCookie: config.accessCookie,
                 tokenManual,

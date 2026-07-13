@@ -1,10 +1,10 @@
 'use strict';
 // Criacao de contas Discord
-// Usa CapSolver para resolver hCaptcha + API de registro do Discord
 
-const axios = require('axios');
-const fs    = require('fs');
-const path  = require('path');
+const axios  = require('axios');
+const fs     = require('fs');
+const path   = require('path');
+const { HttpsProxyAgent } = require('https-proxy-agent');
 
 const BASE    = 'https://discord.com/api/v9';
 const CAPS    = 'https://api.capsolver.com';
@@ -214,7 +214,14 @@ const PERFIS = [
   },
 ];
 
-async function tentarRegistrar(username, email, senha, captchaKey, perfilIdx = 0) {
+// Parse proxy string: http://user:pass@host:port ou host:port
+function buildProxy(proxyStr) {
+  if (!proxyStr) return null;
+  const str = proxyStr.startsWith('http') ? proxyStr : `http://${proxyStr}`;
+  try { return new HttpsProxyAgent(str); } catch { return null; }
+}
+
+async function tentarRegistrar(username, email, senha, captchaKey, perfilIdx = 0, proxy = null) {
   const perfil = PERFIS[perfilIdx % PERFIS.length];
   const headers = {
     'Content-Type': 'application/json',
@@ -232,49 +239,60 @@ async function tentarRegistrar(username, email, senha, captchaKey, perfilIdx = 0
   };
   if (captchaKey) body.captcha_key = captchaKey;
 
-  return axios.post(`${BASE}/auth/register`, body, { headers, timeout: 15000 });
+  const agente = proxy ? buildProxy(proxy) : null;
+  const cfg = { headers, timeout: 20000 };
+  if (agente) cfg.httpsAgent = agente;
+
+  return axios.post(`${BASE}/auth/register`, body, cfg);
 }
 
 // Registra uma conta no Discord
-async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus }) {
+// proxy: string opcional — "host:port" ou "http://user:pass@host:port"
+async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, proxy, onStatus }) {
   // Modo sem captcha: tenta todos os perfis sem resolver nada
   if (metodo === 'semcaptcha') {
     for (let p = 0; p < PERFIS.length; p++) {
-      if (onStatus) onStatus(`Tentativa sem captcha (perfil ${p + 1}/${PERFIS.length})...`);
+      const perfilNome = ['iOS', 'Android', 'Chrome'][p] || `${p+1}`;
+      if (onStatus) onStatus(`Sem captcha (${perfilNome}${proxy ? ' via proxy' : ''})...`);
       try {
-        const res = await tentarRegistrar(username, email, senha, null, p);
+        const res = await tentarRegistrar(username, email, senha, null, p, proxy);
         const token = res.data?.token;
         if (token) return { email, username, senha, token };
       } catch (e) {
         const status = e?.response?.status;
         const data   = e?.response?.data;
 
-        // Rate limit — aguarda e tenta o mesmo perfil novamente
+        // Rate limit — aguarda e repete o mesmo perfil
         if (status === 429) {
           const espera = Math.ceil((data?.retry_after || 10) * 1000);
           if (onStatus) onStatus(`Rate limit — aguardando ${(espera/1000).toFixed(0)}s...`);
           await new Promise(r => setTimeout(r, espera));
-          p--; // repete o mesmo perfil
+          p--;
           continue;
         }
-        // Discord pede captcha — tenta proximo perfil
+        // Captcha exigido — tenta proximo perfil
         if (data?.captcha_key || data?.captcha_sitekey) { continue; }
-        // Email ja registrado — erro definitivo
-        if (data?.errors?.email) throw new Error('EMAIL_JA_REGISTRADO');
-        // Outro erro inesperado
+        // Email bloqueado (IP flagado ou dominio bloqueado)
+        if (data?.errors?.email) {
+          throw new Error(
+            proxy
+              ? 'IP do proxy bloqueado pelo Discord. Troque o proxy.'
+              : 'IP bloqueado pelo Discord. Adicione proxies (opcao 7) ou use VPN.'
+          );
+        }
         throw new Error(data ? JSON.stringify(data) : e.message);
       }
     }
-    throw new Error('Discord exigiu captcha em todos os perfis. Use NopeCHA ou CapSolver (opcao 7 -> Metodo).');
+    throw new Error('Discord exigiu captcha nos 3 perfis. Use NopeCHA ou CapSolver.');
   }
 
   // Modos com captcha
   if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
   const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, nopechaKey, tokenManual, onStatus });
 
-  if (onStatus) onStatus(`Registrando ${username}...`);
+  if (onStatus) onStatus(`Registrando ${username}${proxy ? ' via proxy' : ''}...`);
   try {
-    const res = await tentarRegistrar(username, email, senha, captchaKey, 0);
+    const res = await tentarRegistrar(username, email, senha, captchaKey, 0, proxy);
     const token = res.data?.token;
     if (!token) throw new Error(JSON.stringify(res.data));
     return { email, username, senha, token };

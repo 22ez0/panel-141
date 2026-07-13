@@ -22,6 +22,7 @@ const DEFAULT = {
   accessCookie: '',   // cookie hc_accessibility (gratis)
   capsolverKey: '',   // CapSolver API key (pago)
   nopechaKey: '',     // NopeCHA API key (gratis 1000/mes)
+  proxies: [],        // lista de proxies: ["host:port", "user:pass@host:port", ...]
   emailDominio: 'ikiss.me',
   qtdCriar: 1,
 };

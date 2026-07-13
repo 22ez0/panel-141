@@ -416,7 +416,9 @@ async function menuCriarContas(config) {
     banner();
     console.log(chalk.yellow('  [ 7. CRIAR CONTAS DISCORD ]\n'));
     const metLbl = METODOS_LABEL[config.captchaMetodo] || config.captchaMetodo;
+    const proxiesOk = (config.proxies || []).length;
     console.log(chalk.gray('  Captcha: ') + chalk.white(metLbl));
+    console.log(chalk.gray('  Proxies: ') + (proxiesOk ? chalk.green(`${proxiesOk} configurado(s)`) : chalk.red('nenhum — IP proprio')));
     console.log(chalk.gray('  Dominio: ') + chalk.white(config.emailDominio));
     console.log(chalk.gray('  Gerar:   ') + chalk.white(config.qtdCriar) + ' conta(s)\n');
 
@@ -425,6 +427,7 @@ async function menuCriarContas(config) {
       choices: [
         { name: chalk.gray('<- Voltar'), value: 'voltar' },
         { name: 'Escolher metodo de captcha',               value: 'metodo' },
+        { name: 'Configurar proxies (um por linha)',        value: 'proxies' },
         { name: 'Configurar dominio de email',              value: 'dom' },
         { name: 'Definir quantidade a criar (1-100)',       value: 'qtd' },
         { name: chalk.red('> CRIAR CONTAS AGORA'),          value: 'criar' },
@@ -506,6 +509,24 @@ async function menuCriarContas(config) {
       await new Promise(r => setTimeout(r, 800));
     }
 
+    // ── Proxies ──────────────────────────────────────────────────────────────
+    if (acao === 'proxies') {
+      console.log('');
+      console.log(chalk.white('  Formatos aceitos (um por linha):'));
+      console.log(chalk.gray('    host:porta'));
+      console.log(chalk.gray('    usuario:senha@host:porta'));
+      console.log(chalk.gray('    http://host:porta'));
+      console.log(chalk.gray('  Proxies HTTP/HTTPS gratis: proxyscrape.com, free-proxy-list.net'));
+      console.log(chalk.gray('  Cole os proxies (virgula ou espaco) e pressione Enter.\n'));
+      const { raw } = await inquirer.prompt([{ type: 'input', name: 'raw', message: 'Proxies:', default: (config.proxies || []).join(', ') }]);
+      if (voltou()) return;
+      const lista = raw.split(/[\n,\s]+/).map(p => p.trim()).filter(Boolean);
+      config.proxies = lista;
+      cfg.save(config);
+      log(`${lista.length} proxy(s) salvos.`, lista.length ? 'ok' : 'aviso');
+      await new Promise(r => setTimeout(r, 800));
+    }
+
     // ── Dominio ──────────────────────────────────────────────────────────────
     if (acao === 'dom') {
       const { dom } = await inquirer.prompt([{ type: 'input', name: 'dom', message: 'Dominio de email:', default: config.emailDominio }]);
@@ -571,6 +592,10 @@ async function menuCriarContas(config) {
           tokenManual = tk.trim();
         }
 
+        // Seleciona proxy em round-robin
+        const proxies = config.proxies || [];
+        const proxy   = proxies.length ? proxies[i % proxies.length] : null;
+
         try {
           const conta = await registrarConta({
             email, username: usuario, senha,
@@ -579,6 +604,7 @@ async function menuCriarContas(config) {
             capsolverKey: config.capsolverKey,
             accessCookie: config.accessCookie,
             tokenManual,
+            proxy,
             onStatus: msg => log(msg, 'info'),
           });
           criadas.push(conta);

@@ -40,11 +40,13 @@ async function getChannels(token, guildId) {
   }
 }
 
+// Envia mensagem de texto puro
 async function sendMessage(token, channelId, content) {
   const res = await client(token).post(`/channels/${channelId}/messages`, { content });
   return res.data;
 }
 
+// Envia arquivo local como attachment
 async function sendFile(token, channelId, filePath, caption) {
   const fd = new FormData();
   fd.append('file', fs.createReadStream(filePath), path.basename(filePath));
@@ -57,14 +59,34 @@ async function sendFile(token, channelId, filePath, caption) {
   return res.data;
 }
 
-// Loop continuo de envio para UMA conta — sem delay artificial, so respeita rate limit
-async function loopConta({ token, channels, message, mediaPath, contaNum, onSend, onError }) {
+// Envia midia: URL (discord CDN, imgur, etc.) ou arquivo local
+// mediaUrls: array de strings — URL ou caminho de arquivo
+// mediaIndex: qual usar nesta rodada (round-robin)
+async function sendMidia(token, channelId, mediaUrls, message, mediaIndex) {
+  const media = mediaUrls[mediaIndex % mediaUrls.length];
+  const isUrl = media.startsWith('http://') || media.startsWith('https://');
+
+  if (isUrl) {
+    // URL: inclui no conteudo da mensagem — Discord faz o embed automaticamente
+    const conteudo = message ? `${message}\n${media}` : media;
+    return await sendMessage(token, channelId, conteudo);
+  } else {
+    // Caminho local: faz upload do arquivo
+    return await sendFile(token, channelId, media, message);
+  }
+}
+
+// Loop continuo de envio para UMA conta — sem delay, so respeita rate limit
+async function loopConta({ token, channels, message, mediaUrls, contaNum, onSend, onError }) {
   let count = 0;
+  let mediaIdx = 0;
+
   while (true) {
     const channelId = channels[count % channels.length];
     try {
-      if (mediaPath) {
-        await sendFile(token, channelId, mediaPath, message);
+      if (mediaUrls && mediaUrls.length) {
+        await sendMidia(token, channelId, mediaUrls, message, mediaIdx);
+        mediaIdx++;
       } else {
         await sendMessage(token, channelId, message);
       }
@@ -79,8 +101,7 @@ async function loopConta({ token, channels, message, mediaPath, contaNum, onSend
         await new Promise(r => setTimeout(r, espera));
       }
     }
-    // Sem delay artificial — velocidade maxima respeitando apenas o rate limit do Discord
   }
 }
 
-module.exports = { validateToken, getChannels, sendMessage, sendFile, loopConta };
+module.exports = { validateToken, getChannels, sendMessage, sendFile, sendMidia, loopConta };

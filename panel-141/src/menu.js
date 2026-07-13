@@ -2,41 +2,49 @@
 const inquirer = require('inquirer');
 const chalk    = require('chalk');
 const { banner, log }  = require('./utils');
-const { validateToken, getChannels, sendFile, loopConta } = require('./discord');
+const { voltou }       = require('./goback');
+const { validateToken, getChannels, loopConta } = require('./discord');
 const cfg = require('./config');
 
+// ─── helpers ─────────────────────────────────────────────────────────────────
+async function prompt(questions) {
+  return inquirer.prompt(questions);
+}
+
 async function pressEnter() {
-  await inquirer.prompt([{ type: 'input', name: '_', message: 'Pressione Enter para voltar...' }]);
+  await prompt([{ type: 'input', name: '_', message: 'Pressione Enter para continuar...' }]);
 }
 
 // ─── 1. TOKENS ────────────────────────────────────────────────────────────────
 async function menuTokens(config) {
   while (true) {
     banner();
-    console.log(chalk.yellow('  [ GERENCIAR TOKENS ]\n'));
-    console.log(chalk.gray('  Suporta token de usuario e token de Bot do Discord'));
-    console.log(chalk.gray('  Tokens salvos: ') + chalk.white(config.tokens.length) + '/100\n');
+    console.log(chalk.yellow('  [ 1. GERENCIAR TOKENS ]\n'));
+    console.log(chalk.gray('  Tokens salvos: ') + chalk.white(config.tokens.length) + '/100');
+    console.log(chalk.gray('  Ctrl+N = voltar\n'));
 
-    const { acao } = await inquirer.prompt([{
+    const { acao } = await prompt([{
       type: 'list', name: 'acao', message: 'Opcao:',
       choices: [
-        { name: 'Adicionar tokens (cole 1 a 100 de uma vez)', value: 'add' },
+        { name: chalk.gray('<- Voltar ao menu principal'),    value: 'voltar' },
+        { name: 'Adicionar tokens (cole ate 100 de uma vez)', value: 'add' },
         { name: 'Listar e validar tokens',                    value: 'listar' },
         { name: 'Limpar todos os tokens',                     value: 'limpar' },
-        { name: chalk.gray('<- Voltar ao menu principal'),    value: 'voltar' },
       ],
     }]);
 
-    if (acao === 'voltar') return;
+    if (acao === 'voltar' || voltou()) return;
 
     if (acao === 'add') {
-      console.log(chalk.gray('\n  Cole todos os tokens separados por virgula.'));
-      console.log(chalk.gray('  Exemplo: token1,token2,token3  (ate 100 tokens)\n'));
+      console.log(chalk.gray('\n  Cole os tokens separados por virgula.'));
+      console.log(chalk.gray('  Exemplo: token1,token2,token3'));
+      console.log(chalk.gray('  Deixe vazio e Enter para cancelar.\n'));
 
-      const { raw } = await inquirer.prompt([{
+      const { raw } = await prompt([{
         type: 'input', name: 'raw',
-        message: 'Cole os tokens:',
+        message: 'Tokens:',
       }]);
+      if (voltou() || !raw.trim()) { log('Nenhum token adicionado.', 'aviso'); await new Promise(r => setTimeout(r, 800)); continue; }
 
       const novos = raw.split(',').map(t => t.trim()).filter(Boolean);
       const antes = config.tokens.length;
@@ -51,7 +59,7 @@ async function menuTokens(config) {
     if (acao === 'listar') {
       if (!config.tokens.length) {
         log('Nenhum token salvo ainda.', 'aviso');
-        await new Promise(r => setTimeout(r, 1500));
+        await new Promise(r => setTimeout(r, 1200));
         continue;
       }
       console.log('');
@@ -62,20 +70,22 @@ async function menuTokens(config) {
         if (ok) {
           const tag = (user.discriminator && user.discriminator !== '0')
             ? `${user.username}#${user.discriminator}` : user.username;
-          console.log(chalk.green(`valido - ${tag}`));
+          console.log(chalk.green(`valido  - ${tag}`));
         } else {
           console.log(chalk.red(`invalido - ${error}`));
         }
       }
       console.log('');
       await pressEnter();
+      if (voltou()) return;
     }
 
     if (acao === 'limpar') {
-      const { conf } = await inquirer.prompt([{
+      const { conf } = await prompt([{
         type: 'confirm', name: 'conf',
         message: chalk.red('Remover todos os tokens?'), default: false,
       }]);
+      if (voltou()) return;
       if (conf) {
         config.tokens = [];
         cfg.save(config);
@@ -90,21 +100,22 @@ async function menuTokens(config) {
 async function menuContas(config) {
   while (true) {
     banner();
-    console.log(chalk.yellow('  [ CONTAS ATIVAS ]\n'));
+    console.log(chalk.yellow('  [ 2. CONTAS ATIVAS ]\n'));
     console.log(chalk.gray('  Tokens salvos:  ') + chalk.white(config.tokens.length));
-    console.log(chalk.gray('  Contas ativas:  ') + chalk.white(config.simultaneousUsers) + '\n');
+    console.log(chalk.gray('  Contas ativas:  ') + chalk.white(config.simultaneousUsers));
+    console.log(chalk.gray('  Ctrl+N = voltar\n'));
 
-    const { acao } = await inquirer.prompt([{
+    const { acao } = await prompt([{
       type: 'list', name: 'acao', message: 'Opcao:',
       choices: [
-        { name: 'Definir quantidade de contas', value: 'definir' },
         { name: chalk.gray('<- Voltar ao menu principal'), value: 'voltar' },
+        { name: 'Definir quantidade de contas',            value: 'definir' },
       ],
     }]);
-    if (acao === 'voltar') return;
+    if (acao === 'voltar' || voltou()) return;
 
     const max = config.tokens.length || 100;
-    const { qtd } = await inquirer.prompt([{
+    const { qtd } = await prompt([{
       type: 'number', name: 'qtd',
       message: `Quantas contas enviam ao mesmo tempo? (1-${max}):`,
       validate: v => {
@@ -115,10 +126,11 @@ async function menuContas(config) {
         return true;
       },
     }]);
+    if (voltou()) return;
     config.simultaneousUsers = qtd;
     cfg.save(config);
-    log(`Contas ativas: ${qtd} — todas enviam ao mesmo tempo`, 'ok');
-    await new Promise(r => setTimeout(r, 1200));
+    log(`Contas ativas: ${qtd} — enviam todas ao mesmo tempo`, 'ok');
+    await new Promise(r => setTimeout(r, 1000));
   }
 }
 
@@ -126,27 +138,28 @@ async function menuContas(config) {
 async function menuServidor(config) {
   while (true) {
     banner();
-    console.log(chalk.yellow('  [ SERVIDOR & CANAIS ]\n'));
+    console.log(chalk.yellow('  [ 3. SERVIDOR & CANAIS ]\n'));
     console.log(chalk.gray('  Servidor: ') + chalk.white(config.serverId || 'nao configurado'));
-    console.log(chalk.gray('  Canais:   ') + chalk.white(config.channels.length) + ' canal(is)\n');
+    console.log(chalk.gray('  Canais:   ') + chalk.white(config.channels.length) + ' canal(is)');
+    console.log(chalk.gray('  Ctrl+N = voltar\n'));
 
-    const { acao } = await inquirer.prompt([{
+    const { acao } = await prompt([{
       type: 'list', name: 'acao', message: 'Opcao:',
       choices: [
-        { name: 'Configurar servidor e buscar canais', value: 'buscar' },
-        { name: 'Inserir IDs de canais manualmente',   value: 'manual' },
-        { name: chalk.gray('<- Voltar ao menu principal'), value: 'voltar' },
+        { name: chalk.gray('<- Voltar ao menu principal'),       value: 'voltar' },
+        { name: 'Configurar servidor e buscar canais',           value: 'buscar' },
+        { name: 'Inserir IDs de canais manualmente',             value: 'manual' },
       ],
     }]);
-    if (acao === 'voltar') return;
+    if (acao === 'voltar' || voltou()) return;
 
     if (acao === 'buscar') {
-      const { serverId } = await inquirer.prompt([{
+      const { serverId } = await prompt([{
         type: 'input', name: 'serverId',
         message: 'ID do servidor (Guild ID):',
         default: config.serverId,
-        validate: v => v.trim() ? true : 'Campo obrigatorio',
       }]);
+      if (voltou() || !serverId.trim()) continue;
       config.serverId = serverId.trim();
 
       if (config.tokens.length) {
@@ -157,16 +170,16 @@ async function menuServidor(config) {
             console.log(chalk.green(`\n  ${canais.length} canal(is) encontrado(s):\n`));
             canais.forEach((c, i) => console.log(chalk.gray(`  [${i+1}]`) + ` #${c.name} ` + chalk.gray(`(${c.id})`)));
             console.log('');
-            const { sel } = await inquirer.prompt([{
+            const { sel } = await prompt([{
               type: 'checkbox', name: 'sel',
-              message: 'Selecione os canais de destino:',
+              message: 'Selecione os canais de destino (Espaco = marcar, Enter = confirmar):',
               choices: canais.map(c => ({ name: `#${c.name}`, value: c.id })),
-              validate: v => v.length ? true : 'Selecione ao menos 1 canal',
             }]);
-            config.channels = sel;
+            if (voltou()) return;
+            if (sel.length) config.channels = sel;
           } else {
-            log('Nenhum canal de texto encontrado neste servidor.', 'aviso');
-            await new Promise(r => setTimeout(r, 2000));
+            log('Nenhum canal de texto encontrado.', 'aviso');
+            await new Promise(r => setTimeout(r, 1500));
           }
         } catch (e) {
           log(`Erro ao buscar canais: ${e.message}`, 'erro');
@@ -174,23 +187,24 @@ async function menuServidor(config) {
         }
       } else {
         log('Adicione ao menos um token antes de buscar canais.', 'aviso');
-        await new Promise(r => setTimeout(r, 1800));
+        await new Promise(r => setTimeout(r, 1500));
       }
       cfg.save(config);
-      log(`Servidor e ${config.channels.length} canal(is) salvos.`, 'ok');
-      await new Promise(r => setTimeout(r, 1000));
+      if (config.channels.length) log(`${config.channels.length} canal(is) salvos.`, 'ok');
+      await new Promise(r => setTimeout(r, 800));
     }
 
     if (acao === 'manual') {
-      const { manual } = await inquirer.prompt([{
+      const { manual } = await prompt([{
         type: 'input', name: 'manual',
         message: 'IDs dos canais separados por virgula:',
         default: config.channels.join(','),
       }]);
+      if (voltou()) return;
       config.channels = manual.split(',').map(s => s.trim()).filter(Boolean);
       cfg.save(config);
       log(`${config.channels.length} canal(is) salvos.`, 'ok');
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 800));
     }
   }
 }
@@ -199,73 +213,107 @@ async function menuServidor(config) {
 async function menuMensagem(config) {
   while (true) {
     banner();
-    console.log(chalk.yellow('  [ MENSAGEM & MIDIA ]\n'));
+    console.log(chalk.yellow('  [ 4. MENSAGEM & MIDIA ]\n'));
     const msgExibida = config.message
-      ? (config.message.length > 40 ? config.message.substring(0,40)+'...' : config.message)
+      ? (config.message.length > 38 ? config.message.substring(0, 38) + '...' : config.message)
       : chalk.gray('nao configurada');
-    console.log(chalk.gray('  Mensagem: ') + chalk.white(msgExibida));
-    console.log(chalk.gray('  Midia:    ') + chalk.white(config.mediaPath || chalk.gray('nenhuma')) + '\n');
+    console.log(chalk.gray('  Mensagem:  ') + chalk.white(msgExibida));
+    console.log(chalk.gray('  Midias:    ') + chalk.white(config.mediaUrls.length) + ' URL(s) cadastrada(s)');
+    console.log(chalk.gray('  Ctrl+N = voltar\n'));
 
-    const { acao } = await inquirer.prompt([{
+    const { acao } = await prompt([{
       type: 'list', name: 'acao', message: 'Opcao:',
       choices: [
-        { name: 'Definir mensagem de texto',       value: 'msg' },
-        { name: 'Definir midia (foto ou video)',   value: 'midia' },
-        { name: 'Remover midia',                   value: 'remover' },
-        { name: chalk.gray('<- Voltar ao menu principal'), value: 'voltar' },
+        { name: chalk.gray('<- Voltar ao menu principal'),                        value: 'voltar' },
+        { name: 'Definir mensagem de texto',                                      value: 'msg' },
+        { name: 'Adicionar URLs de midia (Discord CDN, imgur, etc.)',             value: 'addurl' },
+        { name: `Listar URLs cadastradas (${config.mediaUrls.length})`,           value: 'listar' },
+        { name: 'Remover todas as midias',                                        value: 'remover' },
       ],
     }]);
-    if (acao === 'voltar') return;
+    if (acao === 'voltar' || voltou()) return;
 
     if (acao === 'msg') {
-      const { msg } = await inquirer.prompt([{
+      console.log(chalk.gray('\n  Deixe vazio para enviar somente midia.\n'));
+      const { msg } = await prompt([{
         type: 'input', name: 'msg',
-        message: 'Digite a mensagem:',
+        message: 'Mensagem de texto:',
         default: config.message || '',
       }]);
+      if (voltou()) return;
       config.message = msg.trim();
       cfg.save(config);
       log('Mensagem salva.', 'ok');
-      await new Promise(r => setTimeout(r, 800));
+      await new Promise(r => setTimeout(r, 700));
     }
 
-    if (acao === 'midia') {
-      const { mediaPath } = await inquirer.prompt([{
-        type: 'input', name: 'mediaPath',
-        message: 'Caminho do arquivo (ex: C:\\imagens\\foto.jpg):',
-        default: config.mediaPath || '',
-        validate: v => {
-          if (!v.trim()) return 'Campo obrigatorio';
-          if (!require('fs').existsSync(v.trim())) return 'Arquivo nao encontrado no caminho informado';
-          return true;
-        },
+    if (acao === 'addurl') {
+      console.log(chalk.gray('\n  Cole as URLs separadas por virgula.'));
+      console.log(chalk.gray('  No Discord: clique com botao direito na imagem -> "Copiar link"'));
+      console.log(chalk.gray('  Aceita: discord CDN, imgur, etc. ou caminho de arquivo local.'));
+      console.log(chalk.gray('  Deixe vazio e Enter para cancelar.\n'));
+
+      const { raw } = await prompt([{
+        type: 'input', name: 'raw',
+        message: 'URLs (separadas por virgula):',
       }]);
-      config.mediaPath = mediaPath.trim();
+      if (voltou() || !raw.trim()) continue;
+
+      const novas = raw.split(',').map(u => u.trim()).filter(Boolean);
+      const antes = config.mediaUrls.length;
+      config.mediaUrls = [...new Set([...config.mediaUrls, ...novas])];
       cfg.save(config);
-      log('Midia salva.', 'ok');
-      await new Promise(r => setTimeout(r, 800));
+      console.log('');
+      log(`${config.mediaUrls.length - antes} URL(s) adicionada(s). Total: ${config.mediaUrls.length}`, 'ok');
+      console.log('');
+      await pressEnter();
+      if (voltou()) return;
+    }
+
+    if (acao === 'listar') {
+      if (!config.mediaUrls.length) {
+        log('Nenhuma URL cadastrada.', 'aviso');
+        await new Promise(r => setTimeout(r, 1200));
+        continue;
+      }
+      console.log('');
+      config.mediaUrls.forEach((url, i) => {
+        const curta = url.length > 60 ? url.substring(0, 60) + '...' : url;
+        console.log(chalk.gray(`  [${String(i+1).padStart(2)}]`) + ' ' + chalk.white(curta));
+      });
+      console.log('');
+      await pressEnter();
+      if (voltou()) return;
     }
 
     if (acao === 'remover') {
-      config.mediaPath = '';
-      cfg.save(config);
-      log('Midia removida.', 'ok');
-      await new Promise(r => setTimeout(r, 800));
+      const { conf } = await prompt([{
+        type: 'confirm', name: 'conf',
+        message: chalk.red('Remover todas as URLs de midia?'), default: false,
+      }]);
+      if (voltou()) return;
+      if (conf) {
+        config.mediaUrls = [];
+        cfg.save(config);
+        log('Midias removidas.', 'ok');
+        await new Promise(r => setTimeout(r, 700));
+      }
     }
   }
 }
 
-// ─── 5. INICIAR ENVIO — PARALELO ─────────────────────────────────────────────
+// ─── 5. INICIAR ENVIO ────────────────────────────────────────────────────────
 async function menuIniciar(config) {
   banner();
   console.log(chalk.yellow('  [ INICIAR ENVIO ]\n'));
 
   const erros = [];
-  if (!config.tokens.length)                erros.push('Sem tokens configurados (opcao 1)');
-  if (!config.channels.length)              erros.push('Sem canais configurados (opcao 3)');
-  if (!config.message && !config.mediaPath) erros.push('Sem mensagem ou midia (opcao 4)');
+  if (!config.tokens.length)                          erros.push('Sem tokens configurados   (opcao 1)');
+  if (!config.channels.length)                        erros.push('Sem canais configurados   (opcao 3)');
+  if (!config.message && !config.mediaUrls.length)    erros.push('Sem mensagem ou midia     (opcao 4)');
 
   if (erros.length) {
+    console.log(chalk.red('  Configuracao incompleta:\n'));
     erros.forEach(e => log(e, 'aviso'));
     console.log('');
     await pressEnter();
@@ -275,39 +323,36 @@ async function menuIniciar(config) {
   const tokens = config.tokens.slice(0, config.simultaneousUsers);
 
   console.log(chalk.gray('  Todas as contas enviam ao mesmo tempo (paralelo)\n'));
-  console.log(`  ${chalk.cyan('Contas enviando:')} ${tokens.length}`);
-  console.log(`  ${chalk.cyan('Canais alvo:    ')} ${config.channels.length}`);
-  console.log(`  ${chalk.cyan('Mensagem:       ')} ${config.message || chalk.gray('(somente midia)')}`);
-  console.log(`  ${chalk.cyan('Midia:          ')} ${config.mediaPath || chalk.gray('Nenhuma')}`);
-  console.log(`  ${chalk.cyan('Velocidade:     ')} ${chalk.red('MAXIMA')} — sem delay artificial`);
-  console.log(`  ${chalk.cyan('Modo:           ')} ${chalk.red('INFINITO')} — Ctrl+C para parar`);
+  console.log(`  ${chalk.cyan('Contas ativas: ')} ${tokens.length}`);
+  console.log(`  ${chalk.cyan('Canais alvo:   ')} ${config.channels.length}`);
+  console.log(`  ${chalk.cyan('Mensagem:      ')} ${config.message || chalk.gray('(somente midia)')}`);
+  console.log(`  ${chalk.cyan('Midias:        ')} ${config.mediaUrls.length} URL(s) ${config.mediaUrls.length > 1 ? chalk.gray('(ciclo round-robin)') : ''}`);
+  console.log(`  ${chalk.cyan('Velocidade:    ')} ${chalk.red('MAXIMA')} — sem delay artificial`);
+  console.log(`  ${chalk.cyan('Modo:          ')} ${chalk.red('INFINITO')} — Ctrl+C para parar`);
   console.log('');
 
-  const { confirmar } = await inquirer.prompt([{
+  const { confirmar } = await prompt([{
     type: 'confirm', name: 'confirmar',
     message: chalk.red('Iniciar envio em paralelo?'),
   }]);
-  if (!confirmar) return;
+  if (voltou() || !confirmar) return;
 
   console.log('');
   log(`Iniciando ${tokens.length} conta(s) em paralelo. Ctrl+C para encerrar.\n`, 'info');
 
-  // Contador global compartilhado entre todas as contas
   let totalEnviados = 0;
 
-  // Inicia um loop por conta — todos rodam ao mesmo tempo
   const loops = tokens.map((token, idx) =>
     loopConta({
       token,
-      channels: config.channels,
-      message:  config.message,
-      mediaPath: config.mediaPath,
-      contaNum: idx + 1,
+      channels:  config.channels,
+      message:   config.message,
+      mediaUrls: config.mediaUrls,
+      contaNum:  idx + 1,
       onSend: (conta, count, canalId) => {
         totalEnviados++;
         log(
-          `Conta ${String(conta).padStart(2)} -> canal ${canalId} | ` +
-          `enviados: ${chalk.white(totalEnviados)}`,
+          `Conta ${String(conta).padStart(2)} -> canal ${canalId} | total: ${chalk.white(totalEnviados)}`,
           'envio'
         );
       },
@@ -317,37 +362,31 @@ async function menuIniciar(config) {
     })
   );
 
-  // Aguarda todos (infinitamente, ate Ctrl+C)
   await Promise.all(loops);
 }
 
 // ─── STATUS ───────────────────────────────────────────────────────────────────
 function exibirStatus(config) {
-  const t  = config.tokens.length;
-  const si = config.simultaneousUsers;
-  const sv = config.serverId || chalk.red('nao configurado');
-  const ch = config.channels.length;
-  const mg = config.message
-    ? (config.message.length > 28 ? config.message.substring(0,28)+'...' : config.message)
-    : chalk.gray('nao configurada');
-  const md = config.mediaPath ? chalk.green('sim') : chalk.gray('nao');
-
   const linha = (label, val) => {
-    const conteudo = `  ${label.padEnd(14)}${val}`;
+    const conteudo = `  ${label.padEnd(12)}${val}`;
     const raw = conteudo.replace(/\x1B\[[0-9;]*m/g, '');
-    const pad = Math.max(0, 44 - raw.length);
-    return chalk.gray('  |') + conteudo + ' '.repeat(pad) + chalk.gray('|');
+    const pad = ' '.repeat(Math.max(0, 44 - raw.length));
+    return chalk.gray('  |') + conteudo + pad + chalk.gray('|');
   };
+
+  const msgStr = config.message
+    ? (config.message.length > 26 ? config.message.substring(0, 26) + '...' : config.message)
+    : chalk.gray('nao configurada');
 
   return [
     chalk.gray('  +==========================================+'),
-    chalk.gray('  |') + chalk.cyan('  STATUS PAINEL 141                       ') + chalk.gray('|'),
+    chalk.gray('  |') + chalk.cyan('  STATUS ATUAL                            ') + chalk.gray('|'),
     chalk.gray('  +==========================================+'),
-    linha('Tokens:', `${chalk.white(t)}/100  Ativas: ${chalk.white(si)}`),
-    linha('Servidor:', sv),
-    linha('Canais:', `${chalk.white(ch)} canal(is)`),
-    linha('Mensagem:', mg),
-    linha('Midia:', md),
+    linha('Tokens:',   `${chalk.white(config.tokens.length)}/100  Ativas: ${chalk.white(config.simultaneousUsers)}`),
+    linha('Servidor:', config.serverId || chalk.red('nao configurado')),
+    linha('Canais:',   `${chalk.white(config.channels.length)} canal(is)`),
+    linha('Mensagem:', msgStr),
+    linha('Midias:',   `${chalk.white(config.mediaUrls.length)} URL(s) cadastrada(s)`),
     chalk.gray('  +==========================================+'),
     '',
   ].join('\n');
@@ -360,24 +399,22 @@ async function menuPrincipal() {
     banner();
     console.log(exibirStatus(config));
 
-    const { opcao } = await inquirer.prompt([{
+    const { opcao } = await prompt([{
       type: 'list', name: 'opcao',
-      message: chalk.white('Selecione uma opcao:'),
+      message: chalk.white('Selecione:'),
       choices: [
-        { name: `${chalk.cyan('1.')} Tokens (usuario / bot) — ate 100`,    value: '1' },
-        { name: `${chalk.cyan('2.')} Contas ativas (envio simultaneo)`,     value: '2' },
-        { name: `${chalk.cyan('3.')} Servidor e Canais`,                    value: '3' },
-        { name: `${chalk.cyan('4.')} Mensagem e Midia`,                     value: '4' },
-        { name: `${chalk.red('>')}  ${chalk.red.bold('INICIAR ENVIO')}`,    value: '5' },
+        { name: `${chalk.cyan('1.')} Tokens (usuario / bot)  — ate 100`,  value: '1' },
+        { name: `${chalk.cyan('2.')} Contas ativas`,                       value: '2' },
+        { name: `${chalk.cyan('3.')} Servidor e Canais`,                   value: '3' },
+        { name: `${chalk.cyan('4.')} Mensagem e Midia (URLs)`,             value: '4' },
+        { name: `${chalk.red('>')} ${chalk.red.bold('INICIAR ENVIO')}`,   value: '5' },
         new inquirer.Separator(),
         { name: chalk.gray('Sair'), value: '0' },
       ],
     }]);
 
-    if (opcao === '0') {
-      console.log(chalk.gray('\n  Painel 141 encerrado.\n'));
-      process.exit(0);
-    }
+    if (voltou()) continue; // Ctrl+N no menu principal nao faz nada
+    if (opcao === '0') { console.log(chalk.gray('\n  Painel 141 encerrado.\n')); process.exit(0); }
     if (opcao === '1') { await menuTokens(config);   config = cfg.load(); }
     if (opcao === '2') { await menuContas(config);   config = cfg.load(); }
     if (opcao === '3') { await menuServidor(config); config = cfg.load(); }

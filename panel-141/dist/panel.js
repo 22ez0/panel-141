@@ -1564,18 +1564,18 @@ var require_utils = __commonJS({
     function banner2() {
       console.clear();
       console.log("");
-      console.log(chalk.red("  +==========================================+"));
+      console.log(chalk.red("  +------------------------------------------+"));
       console.log(chalk.red("  |                                          |"));
-      console.log(chalk.red("  |   ") + chalk.white(" _   ") + chalk.red("  ") + chalk.white("_  _  ") + chalk.red("  ") + chalk.white(" _   ") + chalk.red("                 |"));
-      console.log(chalk.red("  |   ") + chalk.white("/ |  ") + chalk.red("  ") + chalk.white("| || | ") + chalk.red("  ") + chalk.white("/ |  ") + chalk.red("                 |"));
-      console.log(chalk.red("  |   ") + chalk.white("| |  ") + chalk.red("  ") + chalk.white("| || | ") + chalk.red("  ") + chalk.white("| |  ") + chalk.red("                 |"));
-      console.log(chalk.red("  |   ") + chalk.white("|_|  ") + chalk.red("  ") + chalk.white(" \\_/  ") + chalk.red("  ") + chalk.white("|_|  ") + chalk.red("                 |"));
+      console.log(chalk.red("  |") + chalk.white("  ##  ##  ##  ##   ###   ##  ##  ##  ##  ") + chalk.red("|"));
+      console.log(chalk.red("  |") + chalk.white("  ##  ## ####  ##  # #   ## ##   ##  ##  ") + chalk.red("|"));
+      console.log(chalk.red("  |") + chalk.white("  ##  ##  ##   ##  ###   ####    ##  ##  ") + chalk.red("|"));
+      console.log(chalk.red("  |") + chalk.white("   ####   ##  ####  #   ##  ##    ####   ") + chalk.red("|"));
       console.log(chalk.red("  |                                          |"));
-      console.log(chalk.red("  +==========================================+"));
-      console.log(chalk.red("  |") + chalk.white("    P A I N E L  ") + chalk.red.bold("1  4  1") + chalk.white("             ") + chalk.red("|"));
-      console.log(chalk.red("  |") + chalk.gray("    Discord Automation Panel           ") + chalk.red("|"));
-      console.log(chalk.red("  +==========================================+"));
-      console.log("");
+      console.log(chalk.red("  +------------------------------------------+"));
+      console.log(chalk.red("  |") + chalk.white("      P  A  I  N  E  L  ") + chalk.red.bold(" 1 4 1 ") + chalk.white("          ") + chalk.red("|"));
+      console.log(chalk.red("  |") + chalk.gray("      Discord Automation Panel            ") + chalk.red("|"));
+      console.log(chalk.red("  +------------------------------------------+"));
+      console.log(chalk.gray("\n  [Ctrl+C = sair]   [Ctrl+N = voltar]\n"));
     }
     function log2(msg, tipo = "info") {
       const ts = (/* @__PURE__ */ new Date()).toLocaleTimeString("pt-BR");
@@ -33217,6 +33217,35 @@ var require_inquirer = __commonJS({
   }
 });
 
+// src/goback.js
+var require_goback = __commonJS({
+  "src/goback.js"(exports2, module2) {
+    "use strict";
+    var _flag = false;
+    function setup2() {
+      process.stdin.on("keypress", (str, key) => {
+        if (key && key.ctrl && key.name === "n") {
+          _flag = true;
+          process.stdin.emit("keypress", "\r", {
+            name: "return",
+            ctrl: false,
+            shift: false,
+            meta: false
+          });
+        }
+      });
+    }
+    function voltou() {
+      if (_flag) {
+        _flag = false;
+        return true;
+      }
+      return false;
+    }
+    module2.exports = { setup: setup2, voltou };
+  }
+});
+
 // node_modules/delayed-stream/lib/delayed_stream.js
 var require_delayed_stream = __commonJS({
   "node_modules/delayed-stream/lib/delayed_stream.js"(exports2, module2) {
@@ -43608,7 +43637,7 @@ var require_ms = __commonJS({
 // node_modules/debug/src/common.js
 var require_common = __commonJS({
   "node_modules/debug/src/common.js"(exports2, module2) {
-    function setup(env) {
+    function setup2(env) {
       createDebug.debug = createDebug;
       createDebug.default = createDebug;
       createDebug.coerce = coerce;
@@ -43778,7 +43807,7 @@ var require_common = __commonJS({
       createDebug.enable(createDebug.load());
       return createDebug;
     }
-    module2.exports = setup;
+    module2.exports = setup2;
   }
 });
 
@@ -49698,13 +49727,26 @@ var require_discord = __commonJS({
       });
       return res.data;
     }
-    async function loopConta({ token, channels, message, mediaPath, contaNum, onSend, onError }) {
+    async function sendMidia(token, channelId, mediaUrls, message, mediaIndex) {
+      const media = mediaUrls[mediaIndex % mediaUrls.length];
+      const isUrl = media.startsWith("http://") || media.startsWith("https://");
+      if (isUrl) {
+        const conteudo = message ? `${message}
+${media}` : media;
+        return await sendMessage(token, channelId, conteudo);
+      } else {
+        return await sendFile(token, channelId, media, message);
+      }
+    }
+    async function loopConta({ token, channels, message, mediaUrls, contaNum, onSend, onError }) {
       let count = 0;
+      let mediaIdx = 0;
       while (true) {
         const channelId = channels[count % channels.length];
         try {
-          if (mediaPath) {
-            await sendFile(token, channelId, mediaPath, message);
+          if (mediaUrls && mediaUrls.length) {
+            await sendMidia(token, channelId, mediaUrls, message, mediaIdx);
+            mediaIdx++;
           } else {
             await sendMessage(token, channelId, message);
           }
@@ -49721,7 +49763,7 @@ var require_discord = __commonJS({
         }
       }
     }
-    module2.exports = { validateToken, getChannels, sendMessage, sendFile, loopConta };
+    module2.exports = { validateToken, getChannels, sendMessage, sendFile, sendMidia, loopConta };
   }
 });
 
@@ -49739,12 +49781,18 @@ var require_config2 = __commonJS({
       channels: [],
       simultaneousUsers: 1,
       message: "",
-      mediaPath: ""
+      mediaUrls: []
+      // lista de URLs de midia (Discord CDN, imgur, etc.)
     };
     function load() {
       try {
         if (fs.existsSync(CONFIG_PATH)) {
-          return { ...DEFAULT, ...JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8")) };
+          const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+          if (saved.mediaPath && !saved.mediaUrls) {
+            saved.mediaUrls = saved.mediaPath ? [saved.mediaPath] : [];
+            delete saved.mediaPath;
+          }
+          return { ...DEFAULT, ...saved };
         }
       } catch (_) {
       }
@@ -49764,37 +49812,47 @@ var require_menu = __commonJS({
     var inquirer = require_inquirer();
     var chalk = require_source();
     var { banner: banner2, log: log2 } = require_utils();
-    var { validateToken, getChannels, sendFile, loopConta } = require_discord();
+    var { voltou } = require_goback();
+    var { validateToken, getChannels, loopConta } = require_discord();
     var cfg = require_config2();
+    async function prompt(questions) {
+      return inquirer.prompt(questions);
+    }
     async function pressEnter() {
-      await inquirer.prompt([{ type: "input", name: "_", message: "Pressione Enter para voltar..." }]);
+      await prompt([{ type: "input", name: "_", message: "Pressione Enter para continuar..." }]);
     }
     async function menuTokens(config) {
       while (true) {
         banner2();
-        console.log(chalk.yellow("  [ GERENCIAR TOKENS ]\n"));
-        console.log(chalk.gray("  Suporta token de usuario e token de Bot do Discord"));
-        console.log(chalk.gray("  Tokens salvos: ") + chalk.white(config.tokens.length) + "/100\n");
-        const { acao } = await inquirer.prompt([{
+        console.log(chalk.yellow("  [ 1. GERENCIAR TOKENS ]\n"));
+        console.log(chalk.gray("  Tokens salvos: ") + chalk.white(config.tokens.length) + "/100");
+        console.log(chalk.gray("  Ctrl+N = voltar\n"));
+        const { acao } = await prompt([{
           type: "list",
           name: "acao",
           message: "Opcao:",
           choices: [
-            { name: "Adicionar tokens (cole 1 a 100 de uma vez)", value: "add" },
+            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" },
+            { name: "Adicionar tokens (cole ate 100 de uma vez)", value: "add" },
             { name: "Listar e validar tokens", value: "listar" },
-            { name: "Limpar todos os tokens", value: "limpar" },
-            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" }
+            { name: "Limpar todos os tokens", value: "limpar" }
           ]
         }]);
-        if (acao === "voltar") return;
+        if (acao === "voltar" || voltou()) return;
         if (acao === "add") {
-          console.log(chalk.gray("\n  Cole todos os tokens separados por virgula."));
-          console.log(chalk.gray("  Exemplo: token1,token2,token3  (ate 100 tokens)\n"));
-          const { raw } = await inquirer.prompt([{
+          console.log(chalk.gray("\n  Cole os tokens separados por virgula."));
+          console.log(chalk.gray("  Exemplo: token1,token2,token3"));
+          console.log(chalk.gray("  Deixe vazio e Enter para cancelar.\n"));
+          const { raw } = await prompt([{
             type: "input",
             name: "raw",
-            message: "Cole os tokens:"
+            message: "Tokens:"
           }]);
+          if (voltou() || !raw.trim()) {
+            log2("Nenhum token adicionado.", "aviso");
+            await new Promise((r) => setTimeout(r, 800));
+            continue;
+          }
           const novos = raw.split(",").map((t) => t.trim()).filter(Boolean);
           const antes = config.tokens.length;
           config.tokens = [.../* @__PURE__ */ new Set([...config.tokens, ...novos])].slice(0, 100);
@@ -49807,7 +49865,7 @@ var require_menu = __commonJS({
         if (acao === "listar") {
           if (!config.tokens.length) {
             log2("Nenhum token salvo ainda.", "aviso");
-            await new Promise((r) => setTimeout(r, 1500));
+            await new Promise((r) => setTimeout(r, 1200));
             continue;
           }
           console.log("");
@@ -49817,21 +49875,23 @@ var require_menu = __commonJS({
             const { ok, user, error } = await validateToken(config.tokens[i]);
             if (ok) {
               const tag = user.discriminator && user.discriminator !== "0" ? `${user.username}#${user.discriminator}` : user.username;
-              console.log(chalk.green(`valido - ${tag}`));
+              console.log(chalk.green(`valido  - ${tag}`));
             } else {
               console.log(chalk.red(`invalido - ${error}`));
             }
           }
           console.log("");
           await pressEnter();
+          if (voltou()) return;
         }
         if (acao === "limpar") {
-          const { conf } = await inquirer.prompt([{
+          const { conf } = await prompt([{
             type: "confirm",
             name: "conf",
             message: chalk.red("Remover todos os tokens?"),
             default: false
           }]);
+          if (voltou()) return;
           if (conf) {
             config.tokens = [];
             cfg.save(config);
@@ -49844,21 +49904,22 @@ var require_menu = __commonJS({
     async function menuContas(config) {
       while (true) {
         banner2();
-        console.log(chalk.yellow("  [ CONTAS ATIVAS ]\n"));
+        console.log(chalk.yellow("  [ 2. CONTAS ATIVAS ]\n"));
         console.log(chalk.gray("  Tokens salvos:  ") + chalk.white(config.tokens.length));
-        console.log(chalk.gray("  Contas ativas:  ") + chalk.white(config.simultaneousUsers) + "\n");
-        const { acao } = await inquirer.prompt([{
+        console.log(chalk.gray("  Contas ativas:  ") + chalk.white(config.simultaneousUsers));
+        console.log(chalk.gray("  Ctrl+N = voltar\n"));
+        const { acao } = await prompt([{
           type: "list",
           name: "acao",
           message: "Opcao:",
           choices: [
-            { name: "Definir quantidade de contas", value: "definir" },
-            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" }
+            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" },
+            { name: "Definir quantidade de contas", value: "definir" }
           ]
         }]);
-        if (acao === "voltar") return;
+        if (acao === "voltar" || voltou()) return;
         const max = config.tokens.length || 100;
-        const { qtd } = await inquirer.prompt([{
+        const { qtd } = await prompt([{
           type: "number",
           name: "qtd",
           message: `Quantas contas enviam ao mesmo tempo? (1-${max}):`,
@@ -49870,37 +49931,39 @@ var require_menu = __commonJS({
             return true;
           }
         }]);
+        if (voltou()) return;
         config.simultaneousUsers = qtd;
         cfg.save(config);
-        log2(`Contas ativas: ${qtd} \u2014 todas enviam ao mesmo tempo`, "ok");
-        await new Promise((r) => setTimeout(r, 1200));
+        log2(`Contas ativas: ${qtd} \u2014 enviam todas ao mesmo tempo`, "ok");
+        await new Promise((r) => setTimeout(r, 1e3));
       }
     }
     async function menuServidor(config) {
       while (true) {
         banner2();
-        console.log(chalk.yellow("  [ SERVIDOR & CANAIS ]\n"));
+        console.log(chalk.yellow("  [ 3. SERVIDOR & CANAIS ]\n"));
         console.log(chalk.gray("  Servidor: ") + chalk.white(config.serverId || "nao configurado"));
-        console.log(chalk.gray("  Canais:   ") + chalk.white(config.channels.length) + " canal(is)\n");
-        const { acao } = await inquirer.prompt([{
+        console.log(chalk.gray("  Canais:   ") + chalk.white(config.channels.length) + " canal(is)");
+        console.log(chalk.gray("  Ctrl+N = voltar\n"));
+        const { acao } = await prompt([{
           type: "list",
           name: "acao",
           message: "Opcao:",
           choices: [
+            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" },
             { name: "Configurar servidor e buscar canais", value: "buscar" },
-            { name: "Inserir IDs de canais manualmente", value: "manual" },
-            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" }
+            { name: "Inserir IDs de canais manualmente", value: "manual" }
           ]
         }]);
-        if (acao === "voltar") return;
+        if (acao === "voltar" || voltou()) return;
         if (acao === "buscar") {
-          const { serverId } = await inquirer.prompt([{
+          const { serverId } = await prompt([{
             type: "input",
             name: "serverId",
             message: "ID do servidor (Guild ID):",
-            default: config.serverId,
-            validate: (v) => v.trim() ? true : "Campo obrigatorio"
+            default: config.serverId
           }]);
+          if (voltou() || !serverId.trim()) continue;
           config.serverId = serverId.trim();
           if (config.tokens.length) {
             log2("Buscando canais de texto...", "info");
@@ -49912,17 +49975,17 @@ var require_menu = __commonJS({
 `));
                 canais.forEach((c, i) => console.log(chalk.gray(`  [${i + 1}]`) + ` #${c.name} ` + chalk.gray(`(${c.id})`)));
                 console.log("");
-                const { sel } = await inquirer.prompt([{
+                const { sel } = await prompt([{
                   type: "checkbox",
                   name: "sel",
-                  message: "Selecione os canais de destino:",
-                  choices: canais.map((c) => ({ name: `#${c.name}`, value: c.id })),
-                  validate: (v) => v.length ? true : "Selecione ao menos 1 canal"
+                  message: "Selecione os canais de destino (Espaco = marcar, Enter = confirmar):",
+                  choices: canais.map((c) => ({ name: `#${c.name}`, value: c.id }))
                 }]);
-                config.channels = sel;
+                if (voltou()) return;
+                if (sel.length) config.channels = sel;
               } else {
-                log2("Nenhum canal de texto encontrado neste servidor.", "aviso");
-                await new Promise((r) => setTimeout(r, 2e3));
+                log2("Nenhum canal de texto encontrado.", "aviso");
+                await new Promise((r) => setTimeout(r, 1500));
               }
             } catch (e) {
               log2(`Erro ao buscar canais: ${e.message}`, "erro");
@@ -49930,79 +49993,112 @@ var require_menu = __commonJS({
             }
           } else {
             log2("Adicione ao menos um token antes de buscar canais.", "aviso");
-            await new Promise((r) => setTimeout(r, 1800));
+            await new Promise((r) => setTimeout(r, 1500));
           }
           cfg.save(config);
-          log2(`Servidor e ${config.channels.length} canal(is) salvos.`, "ok");
-          await new Promise((r) => setTimeout(r, 1e3));
+          if (config.channels.length) log2(`${config.channels.length} canal(is) salvos.`, "ok");
+          await new Promise((r) => setTimeout(r, 800));
         }
         if (acao === "manual") {
-          const { manual } = await inquirer.prompt([{
+          const { manual } = await prompt([{
             type: "input",
             name: "manual",
             message: "IDs dos canais separados por virgula:",
             default: config.channels.join(",")
           }]);
+          if (voltou()) return;
           config.channels = manual.split(",").map((s) => s.trim()).filter(Boolean);
           cfg.save(config);
           log2(`${config.channels.length} canal(is) salvos.`, "ok");
-          await new Promise((r) => setTimeout(r, 1e3));
+          await new Promise((r) => setTimeout(r, 800));
         }
       }
     }
     async function menuMensagem(config) {
       while (true) {
         banner2();
-        console.log(chalk.yellow("  [ MENSAGEM & MIDIA ]\n"));
-        const msgExibida = config.message ? config.message.length > 40 ? config.message.substring(0, 40) + "..." : config.message : chalk.gray("nao configurada");
-        console.log(chalk.gray("  Mensagem: ") + chalk.white(msgExibida));
-        console.log(chalk.gray("  Midia:    ") + chalk.white(config.mediaPath || chalk.gray("nenhuma")) + "\n");
-        const { acao } = await inquirer.prompt([{
+        console.log(chalk.yellow("  [ 4. MENSAGEM & MIDIA ]\n"));
+        const msgExibida = config.message ? config.message.length > 38 ? config.message.substring(0, 38) + "..." : config.message : chalk.gray("nao configurada");
+        console.log(chalk.gray("  Mensagem:  ") + chalk.white(msgExibida));
+        console.log(chalk.gray("  Midias:    ") + chalk.white(config.mediaUrls.length) + " URL(s) cadastrada(s)");
+        console.log(chalk.gray("  Ctrl+N = voltar\n"));
+        const { acao } = await prompt([{
           type: "list",
           name: "acao",
           message: "Opcao:",
           choices: [
+            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" },
             { name: "Definir mensagem de texto", value: "msg" },
-            { name: "Definir midia (foto ou video)", value: "midia" },
-            { name: "Remover midia", value: "remover" },
-            { name: chalk.gray("<- Voltar ao menu principal"), value: "voltar" }
+            { name: "Adicionar URLs de midia (Discord CDN, imgur, etc.)", value: "addurl" },
+            { name: `Listar URLs cadastradas (${config.mediaUrls.length})`, value: "listar" },
+            { name: "Remover todas as midias", value: "remover" }
           ]
         }]);
-        if (acao === "voltar") return;
+        if (acao === "voltar" || voltou()) return;
         if (acao === "msg") {
-          const { msg } = await inquirer.prompt([{
+          console.log(chalk.gray("\n  Deixe vazio para enviar somente midia.\n"));
+          const { msg } = await prompt([{
             type: "input",
             name: "msg",
-            message: "Digite a mensagem:",
+            message: "Mensagem de texto:",
             default: config.message || ""
           }]);
+          if (voltou()) return;
           config.message = msg.trim();
           cfg.save(config);
           log2("Mensagem salva.", "ok");
-          await new Promise((r) => setTimeout(r, 800));
+          await new Promise((r) => setTimeout(r, 700));
         }
-        if (acao === "midia") {
-          const { mediaPath } = await inquirer.prompt([{
+        if (acao === "addurl") {
+          console.log(chalk.gray("\n  Cole as URLs separadas por virgula."));
+          console.log(chalk.gray('  No Discord: clique com botao direito na imagem -> "Copiar link"'));
+          console.log(chalk.gray("  Aceita: discord CDN, imgur, etc. ou caminho de arquivo local."));
+          console.log(chalk.gray("  Deixe vazio e Enter para cancelar.\n"));
+          const { raw } = await prompt([{
             type: "input",
-            name: "mediaPath",
-            message: "Caminho do arquivo (ex: C:\\imagens\\foto.jpg):",
-            default: config.mediaPath || "",
-            validate: (v) => {
-              if (!v.trim()) return "Campo obrigatorio";
-              if (!require("fs").existsSync(v.trim())) return "Arquivo nao encontrado no caminho informado";
-              return true;
-            }
+            name: "raw",
+            message: "URLs (separadas por virgula):"
           }]);
-          config.mediaPath = mediaPath.trim();
+          if (voltou() || !raw.trim()) continue;
+          const novas = raw.split(",").map((u) => u.trim()).filter(Boolean);
+          const antes = config.mediaUrls.length;
+          config.mediaUrls = [.../* @__PURE__ */ new Set([...config.mediaUrls, ...novas])];
           cfg.save(config);
-          log2("Midia salva.", "ok");
-          await new Promise((r) => setTimeout(r, 800));
+          console.log("");
+          log2(`${config.mediaUrls.length - antes} URL(s) adicionada(s). Total: ${config.mediaUrls.length}`, "ok");
+          console.log("");
+          await pressEnter();
+          if (voltou()) return;
+        }
+        if (acao === "listar") {
+          if (!config.mediaUrls.length) {
+            log2("Nenhuma URL cadastrada.", "aviso");
+            await new Promise((r) => setTimeout(r, 1200));
+            continue;
+          }
+          console.log("");
+          config.mediaUrls.forEach((url, i) => {
+            const curta = url.length > 60 ? url.substring(0, 60) + "..." : url;
+            console.log(chalk.gray(`  [${String(i + 1).padStart(2)}]`) + " " + chalk.white(curta));
+          });
+          console.log("");
+          await pressEnter();
+          if (voltou()) return;
         }
         if (acao === "remover") {
-          config.mediaPath = "";
-          cfg.save(config);
-          log2("Midia removida.", "ok");
-          await new Promise((r) => setTimeout(r, 800));
+          const { conf } = await prompt([{
+            type: "confirm",
+            name: "conf",
+            message: chalk.red("Remover todas as URLs de midia?"),
+            default: false
+          }]);
+          if (voltou()) return;
+          if (conf) {
+            config.mediaUrls = [];
+            cfg.save(config);
+            log2("Midias removidas.", "ok");
+            await new Promise((r) => setTimeout(r, 700));
+          }
         }
       }
     }
@@ -50010,10 +50106,11 @@ var require_menu = __commonJS({
       banner2();
       console.log(chalk.yellow("  [ INICIAR ENVIO ]\n"));
       const erros = [];
-      if (!config.tokens.length) erros.push("Sem tokens configurados (opcao 1)");
-      if (!config.channels.length) erros.push("Sem canais configurados (opcao 3)");
-      if (!config.message && !config.mediaPath) erros.push("Sem mensagem ou midia (opcao 4)");
+      if (!config.tokens.length) erros.push("Sem tokens configurados   (opcao 1)");
+      if (!config.channels.length) erros.push("Sem canais configurados   (opcao 3)");
+      if (!config.message && !config.mediaUrls.length) erros.push("Sem mensagem ou midia     (opcao 4)");
       if (erros.length) {
+        console.log(chalk.red("  Configuracao incompleta:\n"));
         erros.forEach((e) => log2(e, "aviso"));
         console.log("");
         await pressEnter();
@@ -50021,19 +50118,19 @@ var require_menu = __commonJS({
       }
       const tokens = config.tokens.slice(0, config.simultaneousUsers);
       console.log(chalk.gray("  Todas as contas enviam ao mesmo tempo (paralelo)\n"));
-      console.log(`  ${chalk.cyan("Contas enviando:")} ${tokens.length}`);
-      console.log(`  ${chalk.cyan("Canais alvo:    ")} ${config.channels.length}`);
-      console.log(`  ${chalk.cyan("Mensagem:       ")} ${config.message || chalk.gray("(somente midia)")}`);
-      console.log(`  ${chalk.cyan("Midia:          ")} ${config.mediaPath || chalk.gray("Nenhuma")}`);
-      console.log(`  ${chalk.cyan("Velocidade:     ")} ${chalk.red("MAXIMA")} \u2014 sem delay artificial`);
-      console.log(`  ${chalk.cyan("Modo:           ")} ${chalk.red("INFINITO")} \u2014 Ctrl+C para parar`);
+      console.log(`  ${chalk.cyan("Contas ativas: ")} ${tokens.length}`);
+      console.log(`  ${chalk.cyan("Canais alvo:   ")} ${config.channels.length}`);
+      console.log(`  ${chalk.cyan("Mensagem:      ")} ${config.message || chalk.gray("(somente midia)")}`);
+      console.log(`  ${chalk.cyan("Midias:        ")} ${config.mediaUrls.length} URL(s) ${config.mediaUrls.length > 1 ? chalk.gray("(ciclo round-robin)") : ""}`);
+      console.log(`  ${chalk.cyan("Velocidade:    ")} ${chalk.red("MAXIMA")} \u2014 sem delay artificial`);
+      console.log(`  ${chalk.cyan("Modo:          ")} ${chalk.red("INFINITO")} \u2014 Ctrl+C para parar`);
       console.log("");
-      const { confirmar } = await inquirer.prompt([{
+      const { confirmar } = await prompt([{
         type: "confirm",
         name: "confirmar",
         message: chalk.red("Iniciar envio em paralelo?")
       }]);
-      if (!confirmar) return;
+      if (voltou() || !confirmar) return;
       console.log("");
       log2(`Iniciando ${tokens.length} conta(s) em paralelo. Ctrl+C para encerrar.
 `, "info");
@@ -50043,12 +50140,12 @@ var require_menu = __commonJS({
           token,
           channels: config.channels,
           message: config.message,
-          mediaPath: config.mediaPath,
+          mediaUrls: config.mediaUrls,
           contaNum: idx + 1,
           onSend: (conta, count, canalId) => {
             totalEnviados++;
             log2(
-              `Conta ${String(conta).padStart(2)} -> canal ${canalId} | enviados: ${chalk.white(totalEnviados)}`,
+              `Conta ${String(conta).padStart(2)} -> canal ${canalId} | total: ${chalk.white(totalEnviados)}`,
               "envio"
             );
           },
@@ -50060,27 +50157,22 @@ var require_menu = __commonJS({
       await Promise.all(loops);
     }
     function exibirStatus(config) {
-      const t = config.tokens.length;
-      const si = config.simultaneousUsers;
-      const sv = config.serverId || chalk.red("nao configurado");
-      const ch = config.channels.length;
-      const mg = config.message ? config.message.length > 28 ? config.message.substring(0, 28) + "..." : config.message : chalk.gray("nao configurada");
-      const md = config.mediaPath ? chalk.green("sim") : chalk.gray("nao");
       const linha = (label, val) => {
-        const conteudo = `  ${label.padEnd(14)}${val}`;
+        const conteudo = `  ${label.padEnd(12)}${val}`;
         const raw = conteudo.replace(/\x1B\[[0-9;]*m/g, "");
-        const pad = Math.max(0, 44 - raw.length);
-        return chalk.gray("  |") + conteudo + " ".repeat(pad) + chalk.gray("|");
+        const pad = " ".repeat(Math.max(0, 44 - raw.length));
+        return chalk.gray("  |") + conteudo + pad + chalk.gray("|");
       };
+      const msgStr = config.message ? config.message.length > 26 ? config.message.substring(0, 26) + "..." : config.message : chalk.gray("nao configurada");
       return [
         chalk.gray("  +==========================================+"),
-        chalk.gray("  |") + chalk.cyan("  STATUS PAINEL 141                       ") + chalk.gray("|"),
+        chalk.gray("  |") + chalk.cyan("  STATUS ATUAL                            ") + chalk.gray("|"),
         chalk.gray("  +==========================================+"),
-        linha("Tokens:", `${chalk.white(t)}/100  Ativas: ${chalk.white(si)}`),
-        linha("Servidor:", sv),
-        linha("Canais:", `${chalk.white(ch)} canal(is)`),
-        linha("Mensagem:", mg),
-        linha("Midia:", md),
+        linha("Tokens:", `${chalk.white(config.tokens.length)}/100  Ativas: ${chalk.white(config.simultaneousUsers)}`),
+        linha("Servidor:", config.serverId || chalk.red("nao configurado")),
+        linha("Canais:", `${chalk.white(config.channels.length)} canal(is)`),
+        linha("Mensagem:", msgStr),
+        linha("Midias:", `${chalk.white(config.mediaUrls.length)} URL(s) cadastrada(s)`),
         chalk.gray("  +==========================================+"),
         ""
       ].join("\n");
@@ -50090,20 +50182,21 @@ var require_menu = __commonJS({
       while (true) {
         banner2();
         console.log(exibirStatus(config));
-        const { opcao } = await inquirer.prompt([{
+        const { opcao } = await prompt([{
           type: "list",
           name: "opcao",
-          message: chalk.white("Selecione uma opcao:"),
+          message: chalk.white("Selecione:"),
           choices: [
-            { name: `${chalk.cyan("1.")} Tokens (usuario / bot) \u2014 ate 100`, value: "1" },
-            { name: `${chalk.cyan("2.")} Contas ativas (envio simultaneo)`, value: "2" },
+            { name: `${chalk.cyan("1.")} Tokens (usuario / bot)  \u2014 ate 100`, value: "1" },
+            { name: `${chalk.cyan("2.")} Contas ativas`, value: "2" },
             { name: `${chalk.cyan("3.")} Servidor e Canais`, value: "3" },
-            { name: `${chalk.cyan("4.")} Mensagem e Midia`, value: "4" },
-            { name: `${chalk.red(">")}  ${chalk.red.bold("INICIAR ENVIO")}`, value: "5" },
+            { name: `${chalk.cyan("4.")} Mensagem e Midia (URLs)`, value: "4" },
+            { name: `${chalk.red(">")} ${chalk.red.bold("INICIAR ENVIO")}`, value: "5" },
             new inquirer.Separator(),
             { name: chalk.gray("Sair"), value: "0" }
           ]
         }]);
+        if (voltou()) continue;
         if (opcao === "0") {
           console.log(chalk.gray("\n  Painel 141 encerrado.\n"));
           process.exit(0);
@@ -50137,6 +50230,7 @@ var require_menu = __commonJS({
 // src/index.js
 var { banner, log } = require_utils();
 var { mainMenu } = require_menu();
+var { setup } = require_goback();
 process.on("SIGINT", () => {
   const chalk = require_source();
   console.log(chalk.gray("\n\n  Painel 141 encerrado.\n"));
@@ -50146,6 +50240,7 @@ process.on("SIGINT", () => {
   banner();
   log("Iniciando Painel 141...", "info");
   await new Promise((r) => setTimeout(r, 600));
+  setup();
   await mainMenu();
 })();
 /*! Bundled license information:

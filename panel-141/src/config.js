@@ -2,7 +2,6 @@
 const fs   = require('fs');
 const path = require('path');
 
-// Salva config.json na mesma pasta do script (funciona bundled ou nao)
 const SCRIPT_DIR  = path.dirname(process.argv[1] || __filename);
 const CONFIG_PATH = path.join(SCRIPT_DIR, 'config.json');
 
@@ -12,13 +11,19 @@ const DEFAULT = {
   channels: [],
   simultaneousUsers: 1,
   message: '',
-  mediaPath: '',
+  mediaUrls: [],   // lista de URLs de midia (Discord CDN, imgur, etc.)
 };
 
 function load() {
   try {
     if (fs.existsSync(CONFIG_PATH)) {
-      return { ...DEFAULT, ...JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8')) };
+      const saved = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+      // compatibilidade com config antiga (mediaPath -> mediaUrls)
+      if (saved.mediaPath && !saved.mediaUrls) {
+        saved.mediaUrls = saved.mediaPath ? [saved.mediaPath] : [];
+        delete saved.mediaPath;
+      }
+      return { ...DEFAULT, ...saved };
     }
   } catch (_) {}
   return { ...DEFAULT };

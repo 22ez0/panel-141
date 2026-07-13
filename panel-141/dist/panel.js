@@ -49706,6 +49706,18 @@ var require_discord = __commonJS({
         throw new Error(e?.response?.data?.message || e.message);
       }
     }
+    async function entrarServidor(token, inviteCode) {
+      const code = inviteCode.replace(/.*discord(?:\.gg|app\.com\/invite)\//i, "").trim();
+      const res = await axios.post(
+        `${BASE}/invites/${code}`,
+        { session_id: null },
+        {
+          headers: { ...buildHeaders(token), Referer: `https://discord.com/invite/${code}` },
+          timeout: 15e3
+        }
+      );
+      return res.data;
+    }
     async function sendMessage(token, channelId, content) {
       const res = await client(token).post(`/channels/${channelId}/messages`, { content });
       return res.data;
@@ -49722,13 +49734,28 @@ var require_discord = __commonJS({
       });
       return res.data;
     }
+    async function sendImageUrl(token, channelId, url, caption) {
+      const ext = (url.split("?")[0].match(/\.(png|jpg|jpeg|gif|webp)$/i) || ["", ".jpg"])[0];
+      const nome = `imagem${ext || ".jpg"}`;
+      const imgRes = await axios.get(url, { responseType: "arraybuffer", timeout: 2e4 });
+      const buf = Buffer.from(imgRes.data);
+      const mime = imgRes.headers["content-type"] || "image/jpeg";
+      const fd = new FormData2();
+      fd.append("file", buf, { filename: nome, contentType: mime });
+      if (caption) fd.append("content", caption);
+      const headers = { ...buildHeaders(token), ...fd.getHeaders() };
+      delete headers["Content-Type"];
+      const res = await axios.post(`${BASE}/channels/${channelId}/messages`, fd, {
+        headers,
+        timeout: 3e4
+      });
+      return res.data;
+    }
     async function sendMidia(token, channelId, mediaUrls, message, mediaIndex) {
       const media = mediaUrls[mediaIndex % mediaUrls.length];
       const isUrl = media.startsWith("http://") || media.startsWith("https://");
       if (isUrl) {
-        const conteudo = message ? `${message}
-${media}` : media;
-        return await sendMessage(token, channelId, conteudo);
+        return await sendImageUrl(token, channelId, media, message);
       } else {
         return await sendFile(token, channelId, media, message);
       }
@@ -49758,7 +49785,7 @@ ${media}` : media;
         }
       }
     }
-    module2.exports = { validateToken, getChannels, sendMessage, sendFile, sendMidia, loopConta };
+    module2.exports = { validateToken, getChannels, sendMessage, sendFile, sendMidia, sendImageUrl, entrarServidor, loopConta };
   }
 });
 
@@ -53477,16 +53504,21 @@ var require_gateway = __commonJS({
       const { status = "online", streaming = false, streamUrl, streamTitle } = opts;
       const activities = [];
       if (streaming) {
+        const url = streamUrl && streamUrl.includes("twitch.tv/") && !streamUrl.endsWith("/directory") ? streamUrl : "https://www.twitch.tv/discord";
         activities.push({
           name: "Twitch",
           type: 1,
-          // STREAMING → badge roxo
-          url: streamUrl || "https://www.twitch.tv/directory",
+          // STREAMING — badge roxo
+          url,
           details: streamTitle || "Ao vivo",
           state: "Streaming"
         });
       }
       return { status, activities, afk: false, since: 0 };
+    }
+    function _enviarPresenca(conn, opts) {
+      if (conn.ws.readyState !== WebSocket.OPEN) return;
+      conn.ws.send(JSON.stringify({ op: 3, d: buildPresenca(opts) }));
     }
     function abrir(token, opts = {}) {
       return new Promise((resolve, reject) => {
@@ -53516,13 +53548,15 @@ var require_gateway = __commonJS({
               // IDENTIFY
               d: {
                 token,
-                properties: { os: "Windows", browser: "Discord Client", device: "" },
-                presence: buildPresenca(opts)
+                properties: { os: "Windows", browser: "Discord Client", device: "Discord Client" },
+                presence: buildPresenca(opts),
+                intents: 0
               }
             }));
           }
           if (op === 0 && t === "READY") {
             conn.sessionId = d.session_id;
+            setTimeout(() => _enviarPresenca(conn, opts), 500);
             if (!pronto) {
               pronto = true;
               resolve(conn);
@@ -53547,13 +53581,14 @@ var require_gateway = __commonJS({
             pronto = true;
             resolve(conn);
           }
-        }, 8e3);
+        }, 1e4);
       });
     }
     function atualizarPresenca(token, opts) {
       const conn = conns.get(token);
       if (!conn || conn.ws.readyState !== WebSocket.OPEN) return false;
-      conn.ws.send(JSON.stringify({ op: 3, d: buildPresenca(opts) }));
+      conn.opts = opts;
+      _enviarPresenca(conn, opts);
       return true;
     }
     function entrarVoz(token, guildId, channelId, mudo = true, surdo = false) {
@@ -53784,6 +53819,22 @@ var require_accounts = __commonJS({
       const res = await axios.patch(`${BASE}/users/@me/settings`, { status }, { headers, timeout: 1e4 });
       return res.data;
     }
+    function salvarTokensTxt(contas, dirPath) {
+      const linhas = contas.map(
+        (c) => `${c.token} | ${c.username} | ${c.email} | ${c.senha}`
+      ).join("\n");
+      const arquivo = require("path").join(dirPath, "tokens_criados.txt");
+      const existente = (() => {
+        try {
+          return require("fs").readFileSync(arquivo, "utf8");
+        } catch {
+          return "";
+        }
+      })();
+      const conteudo = existente ? existente + "\n" + linhas : linhas;
+      require("fs").writeFileSync(arquivo, conteudo + "\n");
+      return arquivo;
+    }
     module2.exports = {
       usernameAleatorio,
       emailAleatorio,
@@ -53791,7 +53842,8 @@ var require_accounts = __commonJS({
       registrarConta,
       atualizarFoto,
       atualizarBio,
-      atualizarStatus
+      atualizarStatus,
+      salvarTokensTxt
     };
   }
 });
@@ -53867,8 +53919,10 @@ var require_menu = __commonJS({
       registrarConta,
       atualizarFoto,
       atualizarBio,
-      atualizarStatus
+      atualizarStatus,
+      salvarTokensTxt
     } = require_accounts();
+    var { entrarServidor } = require_discord();
     var cfg = require_config2();
     async function pressEnter() {
       await inquirer.prompt([{ type: "input", name: "_", message: "Pressione Enter para continuar..." }]);
@@ -54140,18 +54194,25 @@ var require_menu = __commonJS({
           if (voltou()) return;
         }
         if (acao === "stream") {
-          log2(`Conectando ${tokens.length} conta(s) ao gateway para streaming...`, "info");
+          if (!config.streamUrl || !config.streamUrl.includes("twitch.tv/")) {
+            log2("Configure a URL do streaming primeiro (Definir URL e titulo).", "aviso");
+            log2("Precisa ser twitch.tv/SEU_CANAL \u2014 ex: https://www.twitch.tv/xqc", "aviso");
+            await new Promise((r) => setTimeout(r, 2e3));
+            continue;
+          }
+          log2(`Conectando ${tokens.length} conta(s) ao gateway para streaming RPC...`, "info");
           let ok = 0;
           for (const token of tokens) {
             try {
               await abrir(token, { status: "online", streaming: true, streamUrl: config.streamUrl, streamTitle: config.streamTitulo });
               ok++;
-              log2(`Conta ${ok}/${tokens.length} \u2192 streaming ativo`, "ok");
+              log2(`Conta ${ok}/${tokens.length} streaming ativo`, "ok");
             } catch (e) {
               log2(`Erro gateway: ${e.message}`, "erro");
             }
+            await new Promise((r) => setTimeout(r, 400));
           }
-          log2(`Streaming ativo em ${ok} conta(s). Mantenha o painel aberto.`, "ok");
+          log2(`Streaming ativo em ${ok} conta(s). NAO feche o painel.`, "ok");
           await pressEnter();
           if (voltou()) return;
         }
@@ -54485,6 +54546,13 @@ var require_menu = __commonJS({
             });
             console.log("");
             log2("Tokens salvos automaticamente (opcao 1).", "ok");
+            try {
+              const dirPath = require("path").dirname(process.argv[1] || __filename);
+              const arq = salvarTokensTxt(criadas, dirPath);
+              log2(`Backup salvo em: tokens_criados.txt`, "ok");
+            } catch (e) {
+              log2(`Nao foi possivel salvar txt: ${e.message}`, "aviso");
+            }
             if (config.fotoUrl || config.bio) {
               log2("Aplicando foto/bio...", "info");
               for (const c of criadas) {
@@ -54509,6 +54577,59 @@ var require_menu = __commonJS({
               }
             }
           }
+          await pressEnter();
+          if (voltou()) return;
+        }
+      }
+    }
+    async function menuEntrarServidor(config) {
+      while (true) {
+        banner2();
+        console.log(chalk.yellow("  [ 8. ENTRAR EM SERVIDOR VIA CONVITE ]\n"));
+        console.log(chalk.gray("  Faz todas as contas ativas entrarem num servidor via link de convite."));
+        console.log(chalk.gray("  Nao precisa de captcha \u2014 funciona com tokens ja existentes.\n"));
+        console.log(chalk.gray("  Tokens ativos: ") + chalk.white(Math.min(config.tokens.length, config.simultaneousUsers)) + "\n");
+        const { acao } = await inquirer.prompt([{
+          type: "list",
+          name: "acao",
+          message: "Opcao:",
+          choices: [
+            { name: chalk.gray("<- Voltar"), value: "voltar" },
+            { name: chalk.red("> ENTRAR NO SERVIDOR AGORA"), value: "entrar" }
+          ]
+        }]);
+        if (acao === "voltar" || voltou()) return;
+        if (acao === "entrar") {
+          const { link } = await inquirer.prompt([{
+            type: "input",
+            name: "link",
+            message: 'Link ou codigo do convite (ex: discord.gg/abc123 ou so "abc123"):'
+          }]);
+          if (voltou() || !link.trim()) continue;
+          const tokens = config.tokens.slice(0, config.simultaneousUsers);
+          if (!tokens.length) {
+            log2("Nenhum token configurado (opcao 1).", "aviso");
+            await new Promise((r) => setTimeout(r, 1500));
+            continue;
+          }
+          log2(`Entrando em ${tokens.length} conta(s)...`, "info");
+          let ok = 0, err = 0;
+          for (let i = 0; i < tokens.length; i++) {
+            try {
+              const res = await entrarServidor(tokens[i], link.trim());
+              const nomeServidor = res?.guild?.name || res?.channel?.name || "servidor";
+              ok++;
+              log2(`[${i + 1}/${tokens.length}] Entrou em: ${nomeServidor}`, "ok");
+            } catch (e) {
+              err++;
+              const msg = e?.response?.data?.message || e.message;
+              log2(`[${i + 1}/${tokens.length}] Erro: ${msg}`, "erro");
+            }
+            if (i < tokens.length - 1) await new Promise((r) => setTimeout(r, 800));
+          }
+          console.log("");
+          console.log(chalk.green(`  Sucesso: ${ok}`) + "  " + (err ? chalk.red(`Erros: ${err}`) : ""));
+          console.log("");
           await pressEnter();
           if (voltou()) return;
         }
@@ -54571,7 +54692,7 @@ var require_menu = __commonJS({
         ln("Canais:", `${chalk.white(config.channels.length)} texto`),
         ln("Mensagem:", msg),
         ln("Midias:", `${chalk.white(config.mediaUrls.length)} URL(s)`),
-        ln("CapSolver:", config.capsolverKey ? chalk.green("configurado") : chalk.gray("nao config")),
+        ln("Captcha:", chalk.white(config.captchaMetodo || "nao config")),
         chalk.gray("  +==========================================+"),
         ""
       ].join("\n");
@@ -54593,7 +54714,8 @@ var require_menu = __commonJS({
             { name: `${chalk.cyan("5.")} Personalizar Contas (foto/bio/RPC)`, value: "5" },
             { name: `${chalk.cyan("6.")} Canais de Voz`, value: "6" },
             { name: `${chalk.cyan("7.")} Criar Contas Discord`, value: "7" },
-            { name: `${chalk.red(">")}  ${chalk.red.bold("INICIAR ENVIO")}`, value: "8" },
+            { name: `${chalk.cyan("8.")} Entrar em Servidor (convite)`, value: "8" },
+            { name: `${chalk.red(">")}  ${chalk.red.bold("INICIAR ENVIO")}`, value: "9" },
             new inquirer.Separator(),
             { name: chalk.gray("Sair"), value: "0" }
           ]
@@ -54633,6 +54755,10 @@ var require_menu = __commonJS({
           config = cfg.load();
         }
         if (opcao === "8") {
+          await menuEntrarServidor(config);
+          config = cfg.load();
+        }
+        if (opcao === "9") {
           await menuIniciar(config);
           config = cfg.load();
         }

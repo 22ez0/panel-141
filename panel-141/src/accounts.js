@@ -34,40 +34,110 @@ function senhaAleatoria() {
   return p;
 }
 
-// Resolve hCaptcha com CapSolver
-async function resolverCaptcha(capsolverKey) {
-  // Criar tarefa
+// ─── METODOS DE RESOLVER CAPTCHA ────────────────────────────────────────────
+
+// Metodo 1: CapSolver (pago, tem free tier no cadastro)
+async function resolverCapSolver(capsolverKey) {
   const createRes = await axios.post(`${CAPS}/createTask`, {
     clientKey: capsolverKey,
-    task: {
-      type:    'HCaptchaTaskProxyLess',
-      websiteURL: SITE_URL,
-      websiteKey: SITE_KEY,
-    },
+    task: { type: 'HCaptchaTaskProxyLess', websiteURL: SITE_URL, websiteKey: SITE_KEY },
   }, { timeout: 15000 });
 
   const taskId = createRes.data?.taskId;
   if (!taskId) throw new Error(`CapSolver: ${JSON.stringify(createRes.data)}`);
 
-  // Aguardar resultado (ate 120s)
   for (let i = 0; i < 40; i++) {
     await new Promise(r => setTimeout(r, 3000));
-    const res = await axios.post(`${CAPS}/getTaskResult`, {
-      clientKey: capsolverKey,
-      taskId,
-    }, { timeout: 10000 });
+    const res = await axios.post(`${CAPS}/getTaskResult`, { clientKey: capsolverKey, taskId }, { timeout: 10000 });
     const { status, solution, errorId, errorDescription } = res.data;
     if (errorId) throw new Error(`CapSolver erro: ${errorDescription}`);
-    if (status === 'ready') return solution.gRecaptchaResponse || solution.userAgent;
-    // status === 'processing' -> continuar aguardando
+    if (status === 'ready') return solution.gRecaptchaResponse;
   }
-  throw new Error('CapSolver timeout — captcha nao resolvido em 120s');
+  throw new Error('CapSolver timeout — nao resolvido em 120s');
+}
+
+// Metodo 2: hCaptcha Accessibility (GRATIS)
+// O usuario registra uma vez em https://www.hcaptcha.com/accessibility
+// e pega o cookie "hc_accessibility" do browser.
+// Esse cookie gera tokens de bypass sem precisar resolver nada.
+async function resolverAccessibility(accessCookie) {
+  // Etapa 1 — obter challenge_id usando o cookie de acessibilidade
+  const resp1 = await axios.post(
+    'https://hcaptcha.com/getcaptcha/v1',
+    new URLSearchParams({
+      host:    'discord.com',
+      sitekey: SITE_KEY,
+      sc:      '1',
+      swa:     '1',
+      spst:    '1',
+    }).toString(),
+    {
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        Cookie: `hc_accessibility=${accessCookie}`,
+        Referer: 'https://discord.com/',
+        Origin:  'https://discord.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      timeout: 15000,
+    }
+  );
+
+  // Se o cookie for valido, o endpoint retorna generated_pass_UUID diretamente
+  const passUUID = resp1.data?.generated_pass_UUID;
+  if (passUUID) return passUUID;
+
+  // Alguns versoes retornam c (challenge) — tenta checkcaptcha com accessibility
+  const c  = resp1.data?.c?.req;
+  const key = resp1.data?.key;
+  if (!c || !key) throw new Error('Cookie de acessibilidade invalido ou expirado. Gere um novo em https://www.hcaptcha.com/accessibility');
+
+  const resp2 = await axios.post(
+    'https://hcaptcha.com/checkcaptcha/v1/' + key,
+    { c, job_mode: 'hCaptchaAccessibility', answers: {}, motionData: '{}' },
+    {
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: `hc_accessibility=${accessCookie}`,
+        Referer: 'https://discord.com/',
+        Origin:  'https://discord.com',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      timeout: 15000,
+    }
+  );
+
+  const token = resp2.data?.generated_pass_UUID;
+  if (!token) throw new Error('Accessibility nao retornou token. Cookie pode estar expirado.');
+  return token;
+}
+
+// Metodo 3: Manual — usuario resolve no browser e cola o token
+async function resolverManual(onStatus) {
+  if (onStatus) onStatus(
+    'Abra no browser: https://discord.com/register\n' +
+    '  Preencha o formulario, resolva o captcha manualmente.\n' +
+    '  Depois, no DevTools (F12) -> Network -> filtre "register"\n' +
+    '  -> Payload -> copie o valor de "captcha_key".\n' +
+    '  Cole abaixo:'
+  );
+  // Nao da pra ler do terminal facilmente aqui; retorna placeholder
+  // O menu trata o input
+  return null; // menu vai pedir o token inline
+}
+
+// Dispatcher — escolhe o metodo certo
+async function resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
+  if (metodo === 'capsolver') return await resolverCapSolver(capsolverKey);
+  if (metodo === 'acessibilidade') return await resolverAccessibility(accessCookie);
+  if (metodo === 'manual') return tokenManual; // ja foi coletado pelo menu
+  throw new Error('Metodo de captcha nao definido');
 }
 
 // Registra uma conta no Discord
-async function registrarConta({ email, username, senha, capsolverKey, onStatus }) {
+async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
   if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-  const captchaKey = await resolverCaptcha(capsolverKey);
+  const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus });
 
   if (onStatus) onStatus(`Registrando ${username}...`);
   const headers = {

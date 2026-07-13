@@ -402,11 +402,14 @@ async function menuVoz(config) {
 }
 
 // ─── 7. CRIAR CONTAS ─────────────────────────────────────────────────────────
+const METODOS_LABEL = { acessibilidade: 'Acessibilidade hCaptcha (GRATIS)', capsolver: 'CapSolver (pago)', manual: 'Manual (voce resolve no browser)' };
+
 async function menuCriarContas(config) {
   while (true) {
     banner();
     console.log(chalk.yellow('  [ 7. CRIAR CONTAS DISCORD ]\n'));
-    console.log(chalk.gray('  Solver:  ') + chalk.white(config.capsolverKey ? config.capsolverKey.slice(0,12)+'...' : 'nao config'));
+    const metLbl = METODOS_LABEL[config.captchaMetodo] || config.captchaMetodo;
+    console.log(chalk.gray('  Captcha: ') + chalk.white(metLbl));
     console.log(chalk.gray('  Dominio: ') + chalk.white(config.emailDominio));
     console.log(chalk.gray('  Gerar:   ') + chalk.white(config.qtdCriar) + ' conta(s)\n');
 
@@ -414,25 +417,66 @@ async function menuCriarContas(config) {
       type: 'list', name: 'acao', message: 'Opcao:',
       choices: [
         { name: chalk.gray('<- Voltar'), value: 'voltar' },
-        { name: 'Configurar CapSolver API Key',    value: 'caps' },
-        { name: 'Configurar dominio de email',     value: 'dom' },
-        { name: 'Definir quantidade a criar',      value: 'qtd' },
-        { name: chalk.red('> CRIAR CONTAS AGORA'), value: 'criar' },
+        { name: 'Escolher metodo de captcha',               value: 'metodo' },
+        { name: 'Configurar dominio de email',              value: 'dom' },
+        { name: 'Definir quantidade a criar (1-100)',       value: 'qtd' },
+        { name: chalk.red('> CRIAR CONTAS AGORA'),          value: 'criar' },
       ],
     }]);
     if (acao === 'voltar' || voltou()) return;
 
-    if (acao === 'caps') {
-      console.log(chalk.gray('\n  Crie conta gratuita em https://capsolver.com'));
-      console.log(chalk.gray('  O plano gratuito resolve alguns captchas por dia.\n'));
-      const { k } = await inquirer.prompt([{ type: 'input', name: 'k', message: 'CapSolver API Key:', default: config.capsolverKey }]);
-      if (voltou()) return;
-      config.capsolverKey = k.trim();
+    // ── Escolher metodo ──────────────────────────────────────────────────────
+    if (acao === 'metodo') {
+      const { met } = await inquirer.prompt([{
+        type: 'list', name: 'met', message: 'Metodo de resolucao de captcha:',
+        choices: [
+          { name: chalk.gray('<- Voltar'), value: 'voltar' },
+          {
+            name: chalk.green('Acessibilidade hCaptcha') + chalk.gray(' — GRATIS, requer cadastro unico em hcaptcha.com'),
+            value: 'acessibilidade',
+          },
+          {
+            name: chalk.yellow('CapSolver') + chalk.gray(' — pago, tem creditos gratuitos no cadastro'),
+            value: 'capsolver',
+          },
+          {
+            name: chalk.cyan('Manual') + chalk.gray(' — voce resolve no browser e cola o token'),
+            value: 'manual',
+          },
+        ],
+      }]);
+      if (met === 'voltar' || voltou()) continue;
+      config.captchaMetodo = met;
+
+      if (met === 'acessibilidade') {
+        console.log('');
+        console.log(chalk.white('  Como obter o cookie de acessibilidade (GRATIS):'));
+        console.log(chalk.gray('  1. Abra: ') + chalk.cyan('https://www.hcaptcha.com/accessibility'));
+        console.log(chalk.gray('  2. Cadastre-se com qualquer email'));
+        console.log(chalk.gray('  3. Apos login, abra DevTools (F12) -> Application -> Cookies'));
+        console.log(chalk.gray('  4. Copie o valor de "hc_accessibility"'));
+        console.log('');
+        const { cookie } = await inquirer.prompt([{ type: 'input', name: 'cookie', message: 'Cole o cookie hc_accessibility:', default: config.accessCookie }]);
+        if (voltou()) return;
+        config.accessCookie = cookie.trim();
+      }
+
+      if (met === 'capsolver') {
+        console.log('');
+        console.log(chalk.gray('  Crie conta em https://capsolver.com'));
+        console.log(chalk.gray('  Novos usuarios recebem creditos gratis para testar.'));
+        console.log('');
+        const { k } = await inquirer.prompt([{ type: 'input', name: 'k', message: 'CapSolver API Key:', default: config.capsolverKey }]);
+        if (voltou()) return;
+        config.capsolverKey = k.trim();
+      }
+
       cfg.save(config);
-      log('CapSolver key salva.', 'ok');
-      await new Promise(r => setTimeout(r, 600));
+      log(`Metodo definido: ${METODOS_LABEL[met]}`, 'ok');
+      await new Promise(r => setTimeout(r, 800));
     }
 
+    // ── Dominio ──────────────────────────────────────────────────────────────
     if (acao === 'dom') {
       const { dom } = await inquirer.prompt([{ type: 'input', name: 'dom', message: 'Dominio de email:', default: config.emailDominio }]);
       if (voltou()) return;
@@ -442,6 +486,7 @@ async function menuCriarContas(config) {
       await new Promise(r => setTimeout(r, 600));
     }
 
+    // ── Quantidade ───────────────────────────────────────────────────────────
     if (acao === 'qtd') {
       const { n } = await inquirer.prompt([{ type: 'number', name: 'n', message: 'Quantas contas criar? (1-100):', validate: v => v >= 1 && v <= 100 ? true : '1-100' }]);
       if (voltou()) return;
@@ -451,11 +496,21 @@ async function menuCriarContas(config) {
       await new Promise(r => setTimeout(r, 600));
     }
 
+    // ── CRIAR ─────────────────────────────────────────────────────────────────
     if (acao === 'criar') {
-      if (!config.capsolverKey) { log('Configure a CapSolver API Key primeiro.', 'aviso'); await new Promise(r => setTimeout(r, 1500)); continue; }
+      // Validacoes por metodo
+      if (config.captchaMetodo === 'acessibilidade' && !config.accessCookie) {
+        log('Configure o cookie de acessibilidade primeiro (opcao "Escolher metodo").', 'aviso');
+        await new Promise(r => setTimeout(r, 1800)); continue;
+      }
+      if (config.captchaMetodo === 'capsolver' && !config.capsolverKey) {
+        log('Configure a CapSolver API Key primeiro (opcao "Escolher metodo").', 'aviso');
+        await new Promise(r => setTimeout(r, 1800)); continue;
+      }
 
       console.log('');
-      log(`Criando ${config.qtdCriar} conta(s). Isso pode demorar alguns minutos...`, 'info');
+      log(`Metodo: ${METODOS_LABEL[config.captchaMetodo]}`, 'info');
+      log(`Criando ${config.qtdCriar} conta(s) com emails @${config.emailDominio}...`, 'info');
       console.log(chalk.gray('  Ctrl+C para cancelar\n'));
 
       const criadas = [];
@@ -465,17 +520,33 @@ async function menuCriarContas(config) {
         const usuario = usernameAleatorio();
         const email   = emailAleatorio(config.emailDominio);
         const senha   = senhaAleatoria();
-        log(`[${i+1}/${config.qtdCriar}] Criando ${usuario} (${email})...`, 'info');
+        log(`[${i+1}/${config.qtdCriar}] ${usuario} (${email})`, 'info');
+
+        // Modo manual: pede o token captcha para cada conta
+        let tokenManual = null;
+        if (config.captchaMetodo === 'manual') {
+          console.log('');
+          console.log(chalk.yellow('  Resolva o captcha manualmente:'));
+          console.log(chalk.gray('  1. Abra: https://discord.com/register'));
+          console.log(chalk.gray('  2. Preencha com: ') + chalk.white(`usuario: ${usuario} | email: ${email}`));
+          console.log(chalk.gray('  3. DevTools (F12) -> Network -> filtre "register" -> veja captcha_key'));
+          console.log('');
+          const { tk } = await inquirer.prompt([{ type: 'input', name: 'tk', message: 'Cole o captcha_key aqui:' }]);
+          if (voltou()) return;
+          tokenManual = tk.trim();
+        }
 
         try {
           const conta = await registrarConta({
             email, username: usuario, senha,
+            metodo:       config.captchaMetodo,
             capsolverKey: config.capsolverKey,
+            accessCookie: config.accessCookie,
+            tokenManual,
             onStatus: msg => log(msg, 'info'),
           });
           criadas.push(conta);
-          log(`[${i+1}] Conta criada! Token: ${conta.token.slice(0,20)}...`, 'ok');
-          // Adiciona token automaticamente
+          log(`[${i+1}] Criada! Token: ${conta.token.slice(0,22)}...`, 'ok');
           config.tokens = [...new Set([...config.tokens, conta.token])].slice(0, 100);
           cfg.save(config);
         } catch (e) {
@@ -484,35 +555,31 @@ async function menuCriarContas(config) {
           erros.push({ email, erro: msg });
         }
 
-        // Pausa entre criações para evitar rate limit
         if (i < config.qtdCriar - 1) await new Promise(r => setTimeout(r, 3000));
       }
 
       console.log('');
-      console.log(chalk.green(`  Contas criadas: ${criadas.length}`));
-      if (erros.length) console.log(chalk.red(`  Erros: ${erros.length}`));
+      console.log(chalk.green(`  Criadas: ${criadas.length}`) + (erros.length ? chalk.red(`  Erros: ${erros.length}`) : ''));
       console.log('');
 
       if (criadas.length) {
-        // Mostra resumo
         criadas.forEach((c, i) => {
-          console.log(chalk.gray(`  [${i+1}] `) + chalk.white(c.username) + chalk.gray(` | ${c.email} | senha: ${c.senha}`));
+          console.log(chalk.gray(`  [${i+1}] `) + chalk.white(c.username) + chalk.gray(` | ${c.email} | ${c.senha}`));
         });
         console.log('');
-        log('Tokens adicionados automaticamente na lista.', 'ok');
+        log('Tokens salvos automaticamente (opcao 1).', 'ok');
 
-        // Aplica foto e bio se configurados
         if (config.fotoUrl || config.bio) {
-          log('Aplicando foto/bio nas contas criadas...', 'info');
+          log('Aplicando foto/bio...', 'info');
           for (const c of criadas) {
             if (config.fotoUrl) {
-              try { await atualizarFoto(c.token, config.fotoUrl); log(`Foto aplicada em ${c.username}`, 'ok'); }
-              catch (e) { log(`Erro foto ${c.username}: ${e.message}`, 'erro'); }
+              try { await atualizarFoto(c.token, config.fotoUrl); log(`Foto -> ${c.username}`, 'ok'); }
+              catch (e) { log(`Erro foto: ${e.message}`, 'erro'); }
               await new Promise(r => setTimeout(r, 800));
             }
             if (config.bio) {
-              try { await atualizarBio(c.token, config.bio); log(`Bio aplicada em ${c.username}`, 'ok'); }
-              catch (e) { log(`Erro bio ${c.username}: ${e.message}`, 'erro'); }
+              try { await atualizarBio(c.token, config.bio); log(`Bio -> ${c.username}`, 'ok'); }
+              catch (e) { log(`Erro bio: ${e.message}`, 'erro'); }
               await new Promise(r => setTimeout(r, 500));
             }
           }

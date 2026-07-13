@@ -46354,7 +46354,7 @@ var require_axios = __commonJS({
       advertiseZstdAcceptEncoding: false,
       validateStatusUndefinedResolves: true
     };
-    var URLSearchParams = url.URLSearchParams;
+    var URLSearchParams2 = url.URLSearchParams;
     var ALPHA = "abcdefghijklmnopqrstuvwxyz";
     var DIGIT = "0123456789";
     var ALPHABET = {
@@ -46377,7 +46377,7 @@ var require_axios = __commonJS({
     var platform$1 = {
       isNode: true,
       classes: {
-        URLSearchParams,
+        URLSearchParams: URLSearchParams2,
         FormData: FormData$1,
         Blob: typeof Blob !== "undefined" && Blob || null
       },
@@ -53623,32 +53623,75 @@ var require_accounts = __commonJS({
       for (let i = 0; i < 16; i++) p += chars[Math.floor(Math.random() * chars.length)];
       return p;
     }
-    async function resolverCaptcha(capsolverKey) {
+    async function resolverCapSolver(capsolverKey) {
       const createRes = await axios.post(`${CAPS}/createTask`, {
         clientKey: capsolverKey,
-        task: {
-          type: "HCaptchaTaskProxyLess",
-          websiteURL: SITE_URL,
-          websiteKey: SITE_KEY
-        }
+        task: { type: "HCaptchaTaskProxyLess", websiteURL: SITE_URL, websiteKey: SITE_KEY }
       }, { timeout: 15e3 });
       const taskId = createRes.data?.taskId;
       if (!taskId) throw new Error(`CapSolver: ${JSON.stringify(createRes.data)}`);
       for (let i = 0; i < 40; i++) {
         await new Promise((r) => setTimeout(r, 3e3));
-        const res = await axios.post(`${CAPS}/getTaskResult`, {
-          clientKey: capsolverKey,
-          taskId
-        }, { timeout: 1e4 });
+        const res = await axios.post(`${CAPS}/getTaskResult`, { clientKey: capsolverKey, taskId }, { timeout: 1e4 });
         const { status, solution, errorId, errorDescription } = res.data;
         if (errorId) throw new Error(`CapSolver erro: ${errorDescription}`);
-        if (status === "ready") return solution.gRecaptchaResponse || solution.userAgent;
+        if (status === "ready") return solution.gRecaptchaResponse;
       }
-      throw new Error("CapSolver timeout \u2014 captcha nao resolvido em 120s");
+      throw new Error("CapSolver timeout \u2014 nao resolvido em 120s");
     }
-    async function registrarConta({ email, username, senha, capsolverKey, onStatus }) {
+    async function resolverAccessibility(accessCookie) {
+      const resp1 = await axios.post(
+        "https://hcaptcha.com/getcaptcha/v1",
+        new URLSearchParams({
+          host: "discord.com",
+          sitekey: SITE_KEY,
+          sc: "1",
+          swa: "1",
+          spst: "1"
+        }).toString(),
+        {
+          headers: {
+            "Content-Type": "application/x-www-form-urlencoded",
+            Cookie: `hc_accessibility=${accessCookie}`,
+            Referer: "https://discord.com/",
+            Origin: "https://discord.com",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          timeout: 15e3
+        }
+      );
+      const passUUID = resp1.data?.generated_pass_UUID;
+      if (passUUID) return passUUID;
+      const c = resp1.data?.c?.req;
+      const key = resp1.data?.key;
+      if (!c || !key) throw new Error("Cookie de acessibilidade invalido ou expirado. Gere um novo em https://www.hcaptcha.com/accessibility");
+      const resp2 = await axios.post(
+        "https://hcaptcha.com/checkcaptcha/v1/" + key,
+        { c, job_mode: "hCaptchaAccessibility", answers: {}, motionData: "{}" },
+        {
+          headers: {
+            "Content-Type": "application/json",
+            Cookie: `hc_accessibility=${accessCookie}`,
+            Referer: "https://discord.com/",
+            Origin: "https://discord.com",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+          },
+          timeout: 15e3
+        }
+      );
+      const token = resp2.data?.generated_pass_UUID;
+      if (!token) throw new Error("Accessibility nao retornou token. Cookie pode estar expirado.");
+      return token;
+    }
+    async function resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
+      if (metodo === "capsolver") return await resolverCapSolver(capsolverKey);
+      if (metodo === "acessibilidade") return await resolverAccessibility(accessCookie);
+      if (metodo === "manual") return tokenManual;
+      throw new Error("Metodo de captcha nao definido");
+    }
+    async function registrarConta({ email, username, senha, metodo, capsolverKey, accessCookie, tokenManual, onStatus }) {
       if (onStatus) onStatus(`Resolvendo captcha para ${email}...`);
-      const captchaKey = await resolverCaptcha(capsolverKey);
+      const captchaKey = await resolverCaptcha({ metodo, capsolverKey, accessCookie, tokenManual, onStatus });
       if (onStatus) onStatus(`Registrando ${username}...`);
       const headers = {
         "Content-Type": "application/json",
@@ -53749,7 +53792,12 @@ var require_config2 = __commonJS({
       streamUrl: "https://www.twitch.tv/directory",
       streamTitulo: "Ao vivo",
       // Criacao de contas
+      captchaMetodo: "acessibilidade",
+      // 'acessibilidade' | 'capsolver' | 'manual'
+      accessCookie: "",
+      // cookie hc_accessibility (gratis)
       capsolverKey: "",
+      // CapSolver API key (pago)
       emailDominio: "ikiss.me",
       qtdCriar: 1
     };
@@ -54234,11 +54282,13 @@ var require_menu = __commonJS({
         }
       }
     }
+    var METODOS_LABEL = { acessibilidade: "Acessibilidade hCaptcha (GRATIS)", capsolver: "CapSolver (pago)", manual: "Manual (voce resolve no browser)" };
     async function menuCriarContas(config) {
       while (true) {
         banner2();
         console.log(chalk.yellow("  [ 7. CRIAR CONTAS DISCORD ]\n"));
-        console.log(chalk.gray("  Solver:  ") + chalk.white(config.capsolverKey ? config.capsolverKey.slice(0, 12) + "..." : "nao config"));
+        const metLbl = METODOS_LABEL[config.captchaMetodo] || config.captchaMetodo;
+        console.log(chalk.gray("  Captcha: ") + chalk.white(metLbl));
         console.log(chalk.gray("  Dominio: ") + chalk.white(config.emailDominio));
         console.log(chalk.gray("  Gerar:   ") + chalk.white(config.qtdCriar) + " conta(s)\n");
         const { acao } = await inquirer.prompt([{
@@ -54247,22 +54297,60 @@ var require_menu = __commonJS({
           message: "Opcao:",
           choices: [
             { name: chalk.gray("<- Voltar"), value: "voltar" },
-            { name: "Configurar CapSolver API Key", value: "caps" },
+            { name: "Escolher metodo de captcha", value: "metodo" },
             { name: "Configurar dominio de email", value: "dom" },
-            { name: "Definir quantidade a criar", value: "qtd" },
+            { name: "Definir quantidade a criar (1-100)", value: "qtd" },
             { name: chalk.red("> CRIAR CONTAS AGORA"), value: "criar" }
           ]
         }]);
         if (acao === "voltar" || voltou()) return;
-        if (acao === "caps") {
-          console.log(chalk.gray("\n  Crie conta gratuita em https://capsolver.com"));
-          console.log(chalk.gray("  O plano gratuito resolve alguns captchas por dia.\n"));
-          const { k } = await inquirer.prompt([{ type: "input", name: "k", message: "CapSolver API Key:", default: config.capsolverKey }]);
-          if (voltou()) return;
-          config.capsolverKey = k.trim();
+        if (acao === "metodo") {
+          const { met } = await inquirer.prompt([{
+            type: "list",
+            name: "met",
+            message: "Metodo de resolucao de captcha:",
+            choices: [
+              { name: chalk.gray("<- Voltar"), value: "voltar" },
+              {
+                name: chalk.green("Acessibilidade hCaptcha") + chalk.gray(" \u2014 GRATIS, requer cadastro unico em hcaptcha.com"),
+                value: "acessibilidade"
+              },
+              {
+                name: chalk.yellow("CapSolver") + chalk.gray(" \u2014 pago, tem creditos gratuitos no cadastro"),
+                value: "capsolver"
+              },
+              {
+                name: chalk.cyan("Manual") + chalk.gray(" \u2014 voce resolve no browser e cola o token"),
+                value: "manual"
+              }
+            ]
+          }]);
+          if (met === "voltar" || voltou()) continue;
+          config.captchaMetodo = met;
+          if (met === "acessibilidade") {
+            console.log("");
+            console.log(chalk.white("  Como obter o cookie de acessibilidade (GRATIS):"));
+            console.log(chalk.gray("  1. Abra: ") + chalk.cyan("https://www.hcaptcha.com/accessibility"));
+            console.log(chalk.gray("  2. Cadastre-se com qualquer email"));
+            console.log(chalk.gray("  3. Apos login, abra DevTools (F12) -> Application -> Cookies"));
+            console.log(chalk.gray('  4. Copie o valor de "hc_accessibility"'));
+            console.log("");
+            const { cookie } = await inquirer.prompt([{ type: "input", name: "cookie", message: "Cole o cookie hc_accessibility:", default: config.accessCookie }]);
+            if (voltou()) return;
+            config.accessCookie = cookie.trim();
+          }
+          if (met === "capsolver") {
+            console.log("");
+            console.log(chalk.gray("  Crie conta em https://capsolver.com"));
+            console.log(chalk.gray("  Novos usuarios recebem creditos gratis para testar."));
+            console.log("");
+            const { k } = await inquirer.prompt([{ type: "input", name: "k", message: "CapSolver API Key:", default: config.capsolverKey }]);
+            if (voltou()) return;
+            config.capsolverKey = k.trim();
+          }
           cfg.save(config);
-          log2("CapSolver key salva.", "ok");
-          await new Promise((r) => setTimeout(r, 600));
+          log2(`Metodo definido: ${METODOS_LABEL[met]}`, "ok");
+          await new Promise((r) => setTimeout(r, 800));
         }
         if (acao === "dom") {
           const { dom } = await inquirer.prompt([{ type: "input", name: "dom", message: "Dominio de email:", default: config.emailDominio }]);
@@ -54281,13 +54369,19 @@ var require_menu = __commonJS({
           await new Promise((r) => setTimeout(r, 600));
         }
         if (acao === "criar") {
-          if (!config.capsolverKey) {
-            log2("Configure a CapSolver API Key primeiro.", "aviso");
-            await new Promise((r) => setTimeout(r, 1500));
+          if (config.captchaMetodo === "acessibilidade" && !config.accessCookie) {
+            log2('Configure o cookie de acessibilidade primeiro (opcao "Escolher metodo").', "aviso");
+            await new Promise((r) => setTimeout(r, 1800));
+            continue;
+          }
+          if (config.captchaMetodo === "capsolver" && !config.capsolverKey) {
+            log2('Configure a CapSolver API Key primeiro (opcao "Escolher metodo").', "aviso");
+            await new Promise((r) => setTimeout(r, 1800));
             continue;
           }
           console.log("");
-          log2(`Criando ${config.qtdCriar} conta(s). Isso pode demorar alguns minutos...`, "info");
+          log2(`Metodo: ${METODOS_LABEL[config.captchaMetodo]}`, "info");
+          log2(`Criando ${config.qtdCriar} conta(s) com emails @${config.emailDominio}...`, "info");
           console.log(chalk.gray("  Ctrl+C para cancelar\n"));
           const criadas = [];
           const erros = [];
@@ -54295,17 +54389,32 @@ var require_menu = __commonJS({
             const usuario = usernameAleatorio();
             const email = emailAleatorio(config.emailDominio);
             const senha = senhaAleatoria();
-            log2(`[${i + 1}/${config.qtdCriar}] Criando ${usuario} (${email})...`, "info");
+            log2(`[${i + 1}/${config.qtdCriar}] ${usuario} (${email})`, "info");
+            let tokenManual = null;
+            if (config.captchaMetodo === "manual") {
+              console.log("");
+              console.log(chalk.yellow("  Resolva o captcha manualmente:"));
+              console.log(chalk.gray("  1. Abra: https://discord.com/register"));
+              console.log(chalk.gray("  2. Preencha com: ") + chalk.white(`usuario: ${usuario} | email: ${email}`));
+              console.log(chalk.gray('  3. DevTools (F12) -> Network -> filtre "register" -> veja captcha_key'));
+              console.log("");
+              const { tk } = await inquirer.prompt([{ type: "input", name: "tk", message: "Cole o captcha_key aqui:" }]);
+              if (voltou()) return;
+              tokenManual = tk.trim();
+            }
             try {
               const conta = await registrarConta({
                 email,
                 username: usuario,
                 senha,
+                metodo: config.captchaMetodo,
                 capsolverKey: config.capsolverKey,
+                accessCookie: config.accessCookie,
+                tokenManual,
                 onStatus: (msg) => log2(msg, "info")
               });
               criadas.push(conta);
-              log2(`[${i + 1}] Conta criada! Token: ${conta.token.slice(0, 20)}...`, "ok");
+              log2(`[${i + 1}] Criada! Token: ${conta.token.slice(0, 22)}...`, "ok");
               config.tokens = [.../* @__PURE__ */ new Set([...config.tokens, conta.token])].slice(0, 100);
               cfg.save(config);
             } catch (e) {
@@ -54316,33 +54425,32 @@ var require_menu = __commonJS({
             if (i < config.qtdCriar - 1) await new Promise((r) => setTimeout(r, 3e3));
           }
           console.log("");
-          console.log(chalk.green(`  Contas criadas: ${criadas.length}`));
-          if (erros.length) console.log(chalk.red(`  Erros: ${erros.length}`));
+          console.log(chalk.green(`  Criadas: ${criadas.length}`) + (erros.length ? chalk.red(`  Erros: ${erros.length}`) : ""));
           console.log("");
           if (criadas.length) {
             criadas.forEach((c, i) => {
-              console.log(chalk.gray(`  [${i + 1}] `) + chalk.white(c.username) + chalk.gray(` | ${c.email} | senha: ${c.senha}`));
+              console.log(chalk.gray(`  [${i + 1}] `) + chalk.white(c.username) + chalk.gray(` | ${c.email} | ${c.senha}`));
             });
             console.log("");
-            log2("Tokens adicionados automaticamente na lista.", "ok");
+            log2("Tokens salvos automaticamente (opcao 1).", "ok");
             if (config.fotoUrl || config.bio) {
-              log2("Aplicando foto/bio nas contas criadas...", "info");
+              log2("Aplicando foto/bio...", "info");
               for (const c of criadas) {
                 if (config.fotoUrl) {
                   try {
                     await atualizarFoto(c.token, config.fotoUrl);
-                    log2(`Foto aplicada em ${c.username}`, "ok");
+                    log2(`Foto -> ${c.username}`, "ok");
                   } catch (e) {
-                    log2(`Erro foto ${c.username}: ${e.message}`, "erro");
+                    log2(`Erro foto: ${e.message}`, "erro");
                   }
                   await new Promise((r) => setTimeout(r, 800));
                 }
                 if (config.bio) {
                   try {
                     await atualizarBio(c.token, config.bio);
-                    log2(`Bio aplicada em ${c.username}`, "ok");
+                    log2(`Bio -> ${c.username}`, "ok");
                   } catch (e) {
-                    log2(`Erro bio ${c.username}: ${e.message}`, "erro");
+                    log2(`Erro bio: ${e.message}`, "erro");
                   }
                   await new Promise((r) => setTimeout(r, 500));
                 }

@@ -24,8 +24,12 @@ function usernameAleatorio() {
 }
 
 function emailAleatorio(dominio = 'ikiss.me') {
-  const user = usernameAleatorio().toLowerCase();
-  return `${user}@${dominio}`;
+  // Usa chars aleatorios + timestamp base36 para garantir unicidade
+  const chars = 'abcdefghijkmnpqrstuvwxyz0123456789';
+  let prefix = '';
+  for (let i = 0; i < 10; i++) prefix += chars[Math.floor(Math.random() * chars.length)];
+  const sufixo = Date.now().toString(36).slice(-5); // 5 chars do timestamp
+  return `${prefix}${sufixo}@${dominio}`;
 }
 
 function senhaAleatoria() {
@@ -242,14 +246,26 @@ async function registrarConta({ email, username, senha, metodo, capsolverKey, ac
         const token = res.data?.token;
         if (token) return { email, username, senha, token };
       } catch (e) {
-        const data = e?.response?.data;
-        // Se Discord pede captcha, tenta proximo perfil
-        if (data?.captcha_key) { continue; }
-        // Outro erro (rate limit, etc.)
+        const status = e?.response?.status;
+        const data   = e?.response?.data;
+
+        // Rate limit — aguarda e tenta o mesmo perfil novamente
+        if (status === 429) {
+          const espera = Math.ceil((data?.retry_after || 10) * 1000);
+          if (onStatus) onStatus(`Rate limit — aguardando ${(espera/1000).toFixed(0)}s...`);
+          await new Promise(r => setTimeout(r, espera));
+          p--; // repete o mesmo perfil
+          continue;
+        }
+        // Discord pede captcha — tenta proximo perfil
+        if (data?.captcha_key || data?.captcha_sitekey) { continue; }
+        // Email ja registrado — erro definitivo
+        if (data?.errors?.email) throw new Error('EMAIL_JA_REGISTRADO');
+        // Outro erro inesperado
         throw new Error(data ? JSON.stringify(data) : e.message);
       }
     }
-    throw new Error('Discord exigiu captcha em todos os perfis. Troque para NopeCHA ou CapSolver.');
+    throw new Error('Discord exigiu captcha em todos os perfis. Use NopeCHA ou CapSolver (opcao 7 -> Metodo).');
   }
 
   // Modos com captcha
